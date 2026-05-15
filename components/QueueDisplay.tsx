@@ -54,8 +54,13 @@ export function QueueDisplay({ initialEntries }: Props) {
       )
       .subscribe();
 
+    // Polling fallback: re-fetch every 5 s in case the realtime channel
+    // silently fails (e.g. auth issues with newer publishable key format).
+    const poll = setInterval(() => void refresh(), 5_000);
+
     return () => {
       void supabase.removeChannel(channel);
+      clearInterval(poll);
     };
   }, []);
 
