@@ -1,12 +1,30 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { getBrowserSupabase } from "@/lib/supabase";
 import type { QueueEntry } from "@/lib/types";
 import { initials } from "@/lib/queue-client";
 
 interface Props {
   initialEntries: QueueEntry[];
+}
+
+function playChime(ctx: AudioContext) {
+  const notes = [523.25, 659.25, 783.99]; // C5 E5 G5
+  notes.forEach((freq, i) => {
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.connect(gain);
+    gain.connect(ctx.destination);
+    osc.type = "sine";
+    osc.frequency.value = freq;
+    const start = ctx.currentTime + i * 0.18;
+    gain.gain.setValueAtTime(0, start);
+    gain.gain.linearRampToValueAtTime(0.35, start + 0.02);
+    gain.gain.exponentialRampToValueAtTime(0.001, start + 0.6);
+    osc.start(start);
+    osc.stop(start + 0.65);
+  });
 }
 
 function formatTime(iso: string): string {
@@ -23,6 +41,23 @@ function waitMinutes(iso: string, now: number): number {
 export function QueueDisplay({ initialEntries }: Props) {
   const [entries, setEntries] = useState<QueueEntry[]>(initialEntries);
   const [now, setNow] = useState<number>(() => Date.now());
+  const [audioUnlocked, setAudioUnlocked] = useState(false);
+  const audioCtxRef = useRef<AudioContext | null>(null);
+
+  function unlockAudio() {
+    const ctx = new AudioContext();
+    audioCtxRef.current = ctx;
+    // Play a silent buffer to satisfy the user-gesture requirement.
+    const buf = ctx.createBuffer(1, 1, 22050);
+    const src = ctx.createBufferSource();
+    src.buffer = buf;
+    src.connect(ctx.destination);
+    src.start();
+    setAudioUnlocked(true);
+  }
+  const calledIdsRef = useRef<Set<string>>(
+    new Set(initialEntries.filter((e) => e.status === "called").map((e) => e.id)),
+  );
 
   useEffect(() => {
     const interval = setInterval(() => setNow(Date.now()), 30_000);
@@ -40,7 +75,18 @@ export function QueueDisplay({ initialEntries }: Props) {
         .select("*")
         .gte("created_at", today.toISOString())
         .order("created_at", { ascending: true });
-      setEntries((data ?? []) as QueueEntry[]);
+      const fresh = (data ?? []) as QueueEntry[];
+
+      // Detect newly called patients and play a chime for each.
+      const newlyCalled = fresh.filter(
+        (e) => e.status === "called" && !calledIdsRef.current.has(e.id),
+      );
+      if (newlyCalled.length > 0 && audioCtxRef.current) playChime(audioCtxRef.current);
+      calledIdsRef.current = new Set(
+        fresh.filter((e) => e.status === "called").map((e) => e.id),
+      );
+
+      setEntries(fresh);
     }
 
     const channel = supabase
@@ -48,15 +94,12 @@ export function QueueDisplay({ initialEntries }: Props) {
       .on(
         "postgres_changes",
         { event: "*", schema: "public", table: "queue_entries" },
-        () => {
-          void refresh();
-        },
+        () => { void refresh(); },
       )
       .subscribe();
 
-    // Polling fallback: re-fetch every 5 s in case the realtime channel
-    // silently fails (e.g. auth issues with newer publishable key format).
-    const poll = setInterval(() => void refresh(), 5_000);
+    // Poll every 2 s so updates land within 2 s even if realtime silently fails.
+    const poll = setInterval(() => void refresh(), 2_000);
 
     return () => {
       void supabase.removeChannel(channel);
@@ -78,6 +121,16 @@ export function QueueDisplay({ initialEntries }: Props) {
 
   return (
     <div className="min-h-screen bg-slate-950 text-white">
+      {!audioUnlocked && (
+        <button
+          onClick={unlockAudio}
+          className="fixed inset-0 z-50 flex flex-col items-center justify-center gap-4 bg-slate-950/90 text-white"
+        >
+          <span className="text-5xl">🔔</span>
+          <span className="text-2xl font-semibold">Tap to enable sound</span>
+          <span className="text-slate-400">Required for patient call alerts</span>
+        </button>
+      )}
       <header className="border-b border-slate-800 px-10 py-6">
         <p className="text-sm font-semibold uppercase tracking-[0.2em] text-brand">
           St Thomas OPC
