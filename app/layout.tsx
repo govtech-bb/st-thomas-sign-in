@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from "next";
 import "./globals.css";
+import { DemoNav } from "@/components/DemoNav";
 
 export const metadata: Metadata = {
   title: "St Thomas OPC -- Patient Queue",
@@ -20,7 +21,10 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en">
-      <body>{children}</body>
+      <body className="pb-14">
+        {children}
+        <DemoNav />
+      </body>
     </html>
   );
 }
