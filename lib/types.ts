@@ -1,6 +1,6 @@
 export type QueueStatus = "waiting" | "called" | "seen";
 
-export type VisitType = "general" | "follow-up" | "specialist" | "other";
+export type VisitType = "general" | "follow-up" | "pharmacy" | "other";
 
 export interface QueueEntry {
   id: string;
@@ -17,7 +17,7 @@ export interface QueueEntry {
 export const VISIT_TYPES: { value: VisitType; label: string }[] = [
   { value: "general", label: "General" },
   { value: "follow-up", label: "Follow-up" },
-  { value: "specialist", label: "Specialist" },
+  { value: "pharmacy", label: "Pharmacy" },
   { value: "other", label: "Other" },
 ];
 
