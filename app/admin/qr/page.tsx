@@ -5,17 +5,17 @@ import { PrintButton } from "@/components/PrintButton";
 
 export const dynamic = "force-dynamic";
 
-function resolveBaseUrl(): string {
+async function resolveBaseUrl(): Promise<string> {
   const fromEnv = process.env.NEXT_PUBLIC_BASE_URL?.trim();
   if (fromEnv) return fromEnv.replace(/\/$/, "");
-  const h = headers();
+  const h = await headers();
   const host = h.get("x-forwarded-host") ?? h.get("host") ?? "localhost:3000";
   const proto = h.get("x-forwarded-proto") ?? "https";
   return `${proto}://${host}`;
 }
 
 export default async function AdminQrPage() {
-  const baseUrl = resolveBaseUrl();
+  const baseUrl = await resolveBaseUrl();
   const signInUrl = `${baseUrl}/`;
   const svg = await QRCodeLib.toString(signInUrl, {
     type: "svg",
