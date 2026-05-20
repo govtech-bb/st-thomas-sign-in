@@ -1,8 +1,18 @@
 import { staffLoginAction } from "@/app/actions";
 
+export type StaffLoginError = "invalid" | "locked" | "config";
+
 interface Props {
-  error?: boolean;
+  error?: StaffLoginError;
 }
+
+const ERROR_MESSAGES: Record<StaffLoginError, string> = {
+  invalid: "Incorrect PIN. Try again.",
+  locked:
+    "Too many failed attempts from this network. Try again in a few minutes.",
+  config:
+    "Staff PIN is misconfigured on the server. Ask an administrator to set a strong STAFF_PIN.",
+};
 
 export function StaffLogin({ error }: Props) {
   return (
@@ -29,7 +39,7 @@ export function StaffLogin({ error }: Props) {
         </div>
         {error && (
           <p role="alert" className="rounded-md bg-red-50 px-4 py-3 text-red-700">
-            Incorrect PIN. Try again.
+            {ERROR_MESSAGES[error]}
           </p>
         )}
         <button type="submit" className="btn-primary w-full">
