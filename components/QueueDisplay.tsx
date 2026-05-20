@@ -2,8 +2,9 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { getBrowserSupabase } from "@/lib/supabase";
-import type { QueueEntry } from "@/lib/types";
-import { initials } from "@/lib/queue-client";
+import type { QueueEntry, Stream } from "@/lib/types";
+import { STREAM_LABELS, streamFor } from "@/lib/types";
+import { maskedDisplayName } from "@/lib/queue-client";
 
 interface Props {
   initialEntries: QueueEntry[];
@@ -27,15 +28,44 @@ function playChime(ctx: AudioContext) {
   });
 }
 
-function formatTime(iso: string): string {
-  return new Date(iso).toLocaleTimeString([], {
-    hour: "2-digit",
-    minute: "2-digit",
-  });
+function getFemaleVoice(): SpeechSynthesisVoice | null {
+  const voices = window.speechSynthesis.getVoices();
+  return (
+    voices.find((v) =>
+      /female|zira|samantha|google uk english female/i.test(v.name),
+    ) ?? null
+  );
+}
+
+function announcePatient(entry: QueueEntry) {
+  const voice = getFemaleVoice();
+  if (!voice) return;
+  const stream = streamFor(entry.visit_type);
+  const where = stream === "pharmacy" ? "the pharmacy window" : "the front desk";
+  const ticket = entry.ticket_number ?? 0;
+  const masked = maskedDisplayName(entry.name);
+  const msg = new SpeechSynthesisUtterance(
+    `Number ${ticket}, ${masked}. Please go to ${where}.`,
+  );
+  msg.voice = voice;
+  window.speechSynthesis.speak(msg);
 }
 
 function waitMinutes(iso: string, now: number): number {
   return Math.max(0, Math.floor((now - new Date(iso).getTime()) / 60000));
+}
+
+// Top 3 currently called or preparing, freshest first. Priority entries are
+// hidden from the public display per spec.
+function topCalled(entries: QueueEntry[]): QueueEntry[] {
+  return entries
+    .filter((e) => (e.status === "called" || e.status === "preparing") && !e.priority)
+    .sort(
+      (a, b) =>
+        new Date(b.called_at ?? 0).getTime() -
+        new Date(a.called_at ?? 0).getTime(),
+    )
+    .slice(0, 3);
 }
 
 export function QueueDisplay({ initialEntries }: Props) {
@@ -44,20 +74,21 @@ export function QueueDisplay({ initialEntries }: Props) {
   const [audioUnlocked, setAudioUnlocked] = useState(false);
   const audioCtxRef = useRef<AudioContext | null>(null);
 
+  const visibleCalledIdsRef = useRef<Set<string>>(
+    new Set(topCalled(initialEntries).map((e) => e.id)),
+  );
+
   function unlockAudio() {
     const ctx = new AudioContext();
     audioCtxRef.current = ctx;
-    // Play a silent buffer to satisfy the user-gesture requirement.
     const buf = ctx.createBuffer(1, 1, 22050);
     const src = ctx.createBufferSource();
     src.buffer = buf;
     src.connect(ctx.destination);
     src.start();
+    window.speechSynthesis.getVoices();
     setAudioUnlocked(true);
   }
-  const calledIdsRef = useRef<Set<string>>(
-    new Set(initialEntries.filter((e) => e.status === "called").map((e) => e.id)),
-  );
 
   useEffect(() => {
     const interval = setInterval(() => setNow(Date.now()), 30_000);
@@ -74,18 +105,23 @@ export function QueueDisplay({ initialEntries }: Props) {
         .from("queue_entries")
         .select("*")
         .gte("created_at", today.toISOString())
+        .order("priority", { ascending: false })
         .order("created_at", { ascending: true });
       const fresh = (data ?? []) as QueueEntry[];
 
-      // Detect newly called patients and play a chime for each.
-      const newlyCalled = fresh.filter(
-        (e) => e.status === "called" && !calledIdsRef.current.has(e.id),
-      );
-      if (newlyCalled.length > 0 && audioCtxRef.current) playChime(audioCtxRef.current);
-      calledIdsRef.current = new Set(
-        fresh.filter((e) => e.status === "called").map((e) => e.id),
+      const visible = topCalled(fresh);
+      const newlyVisible = visible.filter(
+        (e) => !visibleCalledIdsRef.current.has(e.id),
       );
 
+      if (newlyVisible.length > 0 && audioCtxRef.current) {
+        playChime(audioCtxRef.current);
+        setTimeout(() => {
+          newlyVisible.forEach((e) => announcePatient(e));
+        }, 1100);
+      }
+
+      visibleCalledIdsRef.current = new Set(visible.map((e) => e.id));
       setEntries(fresh);
     }
 
@@ -98,7 +134,6 @@ export function QueueDisplay({ initialEntries }: Props) {
       )
       .subscribe();
 
-    // Poll every 2 s so updates land within 2 s even if realtime silently fails.
     const poll = setInterval(() => void refresh(), 2_000);
 
     return () => {
@@ -107,15 +142,23 @@ export function QueueDisplay({ initialEntries }: Props) {
     };
   }, []);
 
-  const { calledNow, waiting } = useMemo(() => {
+  const { calledNow, columns } = useMemo(() => {
+    // Public display hides priority entries entirely and never reveals full
+    // names. Waiting entries show only the ticket number.
+    const waiting = entries
+      .filter((e) => e.status === "waiting" && !e.priority)
+      .sort(
+        (a, b) =>
+          new Date(a.created_at).getTime() - new Date(b.created_at).getTime(),
+      );
+    const streams: Stream[] = ["clinical", "pharmacy"];
     return {
-      calledNow: entries.filter((e) => e.status === "called"),
-      waiting: entries
-        .filter((e) => e.status === "waiting")
-        .sort(
-          (a, b) =>
-            new Date(a.created_at).getTime() - new Date(b.created_at).getTime(),
-        ),
+      calledNow: topCalled(entries),
+      columns: streams.map((s) => ({
+        stream: s,
+        label: STREAM_LABELS[s],
+        patients: waiting.filter((e) => streamFor(e.visit_type) === s),
+      })),
     };
   }, [entries]);
 
@@ -131,6 +174,7 @@ export function QueueDisplay({ initialEntries }: Props) {
           <span className="text-slate-400">Required for patient call alerts</span>
         </button>
       )}
+
       <header className="border-b border-slate-800 px-10 py-6">
         <p className="text-sm font-semibold uppercase tracking-[0.2em] text-brand">
           St Thomas OPC
@@ -138,59 +182,61 @@ export function QueueDisplay({ initialEntries }: Props) {
         <h1 className="mt-1 text-4xl font-bold">Patient Queue</h1>
       </header>
 
-      <div className="grid gap-10 px-10 py-10 lg:grid-cols-[1fr_2fr]">
-        <section>
-          <h2 className="text-2xl font-semibold text-slate-300">Now calling</h2>
-          {calledNow.length === 0 ? (
-            <p className="mt-4 rounded-lg bg-slate-900 px-6 py-8 text-xl text-slate-500">
-              Nobody is being called right now.
-            </p>
-          ) : (
-            <ul className="mt-4 space-y-3">
-              {calledNow.map((e) => (
-                <li
-                  key={e.id}
-                  className="rounded-lg bg-amber-400 px-6 py-6 text-slate-950"
-                >
-                  <div className="text-5xl font-bold">{initials(e.name)}</div>
-                  <div className="mt-2 text-xl font-semibold capitalize">
-                    {e.visit_type}
-                  </div>
-                </li>
-              ))}
-            </ul>
-          )}
-        </section>
+      {calledNow.length > 0 && (
+        <div className="mx-10 mt-8 flex flex-wrap gap-4">
+          {calledNow.map((e) => {
+            const stream = streamFor(e.visit_type);
+            return (
+              <div
+                key={e.id}
+                className="flex-1 min-w-56 rounded-lg bg-amber-400 px-6 py-5 text-slate-950"
+              >
+                <p className="text-sm font-bold uppercase tracking-widest">
+                  Now calling — {STREAM_LABELS[stream]}
+                </p>
+                <div className="mt-1 text-6xl font-black">#{e.ticket_number ?? "—"}</div>
+                <div className="mt-1 text-2xl font-bold">{maskedDisplayName(e.name)}</div>
+                <div className="mt-0.5 text-sm">
+                  {stream === "pharmacy" ? "Please go to the pharmacy window" : "Please go to the front desk"}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
 
-        <section>
-          <h2 className="text-2xl font-semibold text-slate-300">Waiting</h2>
-          {waiting.length === 0 ? (
-            <p className="mt-4 rounded-lg bg-slate-900 px-6 py-8 text-xl text-slate-500">
-              The queue is empty. Welcome in.
-            </p>
-          ) : (
-            <ol className="mt-4 divide-y divide-slate-800 rounded-lg bg-slate-900">
-              {waiting.map((e, idx) => (
-                <li
-                  key={e.id}
-                  className="grid grid-cols-[4rem_5rem_1fr_8rem_8rem] items-center gap-6 px-6 py-5"
-                >
-                  <span className="text-4xl font-bold text-brand">{idx + 1}</span>
-                  <span className="text-3xl font-bold">{initials(e.name)}</span>
-                  <span className="text-xl capitalize text-slate-300">
-                    {e.visit_type}
-                  </span>
-                  <span className="text-lg text-slate-400">
-                    Arrived {formatTime(e.created_at)}
-                  </span>
-                  <span className="text-lg text-slate-400">
-                    {waitMinutes(e.created_at, now)} min waiting
-                  </span>
-                </li>
-              ))}
-            </ol>
-          )}
-        </section>
+      <div className="grid grid-cols-1 gap-6 px-10 py-8 lg:grid-cols-2">
+        {columns.map((col) => (
+          <section key={col.stream}>
+            <h2 className="mb-3 rounded-md bg-slate-800 px-4 py-2 text-center text-2xl font-semibold tracking-wide text-slate-100">
+              {col.label}
+              <span className="ml-2 text-base font-normal text-slate-400">
+                ({col.patients.length})
+              </span>
+            </h2>
+            {col.patients.length === 0 ? (
+              <p className="rounded-lg bg-slate-900 px-4 py-6 text-center text-slate-600">
+                No patients
+              </p>
+            ) : (
+              <ol className="space-y-2">
+                {col.patients.map((e) => (
+                  <li
+                    key={e.id}
+                    className="flex items-center gap-4 rounded-lg bg-slate-900 px-4 py-3"
+                  >
+                    <span className="text-3xl font-black text-brand">
+                      #{e.ticket_number ?? "—"}
+                    </span>
+                    <span className="text-xs text-slate-500">
+                      {waitMinutes(e.created_at, now)} min waiting
+                    </span>
+                  </li>
+                ))}
+              </ol>
+            )}
+          </section>
+        ))}
       </div>
     </div>
   );

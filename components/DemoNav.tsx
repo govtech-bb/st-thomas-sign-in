@@ -7,6 +7,7 @@ const links = [
   { href: "/", label: "Sign in" },
   { href: "/display", label: "Display" },
   { href: "/staff", label: "Staff" },
+  { href: "/pharmacy", label: "Pharmacy" },
   { href: "/admin/qr", label: "QR code" },
 ];
 

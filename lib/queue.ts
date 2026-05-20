@@ -1,6 +1,7 @@
 import { getServerSupabase, getAnonServerSupabase } from "./supabase-server";
 import { generateToken } from "./token";
-import type { QueueEntry } from "./types";
+import { streamFor } from "./types";
+import type { HasPrescription, QueueEntry, Stream } from "./types";
 
 const AVG_MINUTES_PER_PATIENT = 8;
 const MAX_TOKEN_ATTEMPTS = 8;
@@ -11,15 +12,76 @@ function startOfTodayIso(): string {
   return now.toISOString();
 }
 
+async function nextTicketNumber(stream: Stream): Promise<number> {
+  const supabase = getServerSupabase();
+  const since = startOfTodayIso();
+  const isPharmacy = stream === "pharmacy";
+
+  let query = supabase
+    .from("queue_entries")
+    .select("ticket_number")
+    .gte("created_at", since)
+    .order("ticket_number", { ascending: false })
+    .limit(1);
+
+  query = isPharmacy
+    ? query.eq("visit_type", "pharmacy")
+    : query.neq("visit_type", "pharmacy");
+
+  const { data } = await query.maybeSingle();
+  const last = (data?.ticket_number as number | null) ?? 0;
+  return last + 1;
+}
+
+async function writeAudit(row: {
+  entry_id: string | null;
+  actor_id?: string | null;
+  actor_label?: string | null;
+  action:
+    | "sign_in"
+    | "call"
+    | "preparing"
+    | "seen"
+    | "transfer"
+    | "priority_insert"
+    | "pharmacy_note"
+    | "reset_day";
+  detail?: Record<string, unknown> | null;
+}): Promise<void> {
+  const supabase = getServerSupabase();
+  await supabase.from("queue_audit").insert({
+    entry_id: row.entry_id,
+    actor_id: row.actor_id ?? null,
+    actor_label: row.actor_label ?? null,
+    action: row.action,
+    detail: row.detail ?? null,
+  });
+}
+
 export async function listTodayEntries(): Promise<QueueEntry[]> {
   const supabase = getAnonServerSupabase();
   const { data, error } = await supabase
     .from("queue_entries")
     .select("*")
     .gte("created_at", startOfTodayIso())
+    .order("priority", { ascending: false })
     .order("created_at", { ascending: true });
   if (error) throw error;
   return (data ?? []) as QueueEntry[];
+}
+
+export async function findEntryByIdNumber(idNumber: string): Promise<QueueEntry | null> {
+  const supabase = getAnonServerSupabase();
+  const { data } = await supabase
+    .from("queue_entries")
+    .select("*")
+    .eq("id_number", idNumber)
+    .gte("created_at", startOfTodayIso())
+    .neq("status", "seen")
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  return (data as QueueEntry | null) ?? null;
 }
 
 export async function getEntryByToken(token: string): Promise<QueueEntry | null> {
@@ -35,12 +97,18 @@ export async function getEntryByToken(token: string): Promise<QueueEntry | null>
 
 export interface CreateEntryInput {
   name: string;
+  idType: string;
+  idNumber: string;
   visitType: string;
+  hasPrescription?: HasPrescription | null;
 }
 
 export async function createEntry({
   name,
+  idType,
+  idNumber,
   visitType,
+  hasPrescription,
 }: CreateEntryInput): Promise<QueueEntry> {
   const supabase = getServerSupabase();
 
@@ -52,6 +120,8 @@ export async function createEntry({
   if (countError) throw countError;
 
   const position = (count ?? 0) + 1;
+  const stream = streamFor(visitType);
+  const ticketNumber = await nextTicketNumber(stream);
 
   let lastError: unknown = null;
   for (let attempt = 0; attempt < MAX_TOKEN_ATTEMPTS; attempt++) {
@@ -61,15 +131,25 @@ export async function createEntry({
       .insert({
         token,
         name: name.trim(),
+        id_type: idType,
+        id_number: idNumber.trim(),
         visit_type: visitType,
         position,
+        ticket_number: ticketNumber,
         status: "waiting",
+        has_prescription: visitType === "pharmacy" ? hasPrescription ?? null : null,
       })
       .select("*")
       .single();
-    if (!error && data) return data as QueueEntry;
+    if (!error && data) {
+      await writeAudit({
+        entry_id: (data as QueueEntry).id,
+        action: "sign_in",
+        detail: { stream, ticket_number: ticketNumber, visit_type: visitType },
+      });
+      return data as QueueEntry;
+    }
     lastError = error;
-    // 23505 = unique_violation -> token collision, retry with a new token.
     if (error && (error as { code?: string }).code !== "23505") {
       throw error;
     }
@@ -79,31 +159,220 @@ export async function createEntry({
     : new Error("Failed to allocate a unique queue token");
 }
 
-export async function callEntry(id: string): Promise<void> {
+export interface PriorityInsertInput extends CreateEntryInput {
+  reason: string;
+  actorId: string | null;
+  actorLabel: string | null;
+}
+
+export async function priorityInsert(input: PriorityInsertInput): Promise<QueueEntry> {
   const supabase = getServerSupabase();
+  const stream = streamFor(input.visitType);
+  const ticketNumber = await nextTicketNumber(stream);
+
+  let lastError: unknown = null;
+  for (let attempt = 0; attempt < MAX_TOKEN_ATTEMPTS; attempt++) {
+    const token = generateToken(4);
+    const { data, error } = await supabase
+      .from("queue_entries")
+      .insert({
+        token,
+        name: input.name.trim(),
+        id_type: input.idType,
+        id_number: input.idNumber.trim() || "PRIORITY",
+        visit_type: input.visitType,
+        position: 0,
+        ticket_number: ticketNumber,
+        status: "waiting",
+        priority: true,
+        priority_reason: input.reason.trim() || null,
+      })
+      .select("*")
+      .single();
+    if (!error && data) {
+      await writeAudit({
+        entry_id: (data as QueueEntry).id,
+        actor_id: input.actorId,
+        actor_label: input.actorLabel,
+        action: "priority_insert",
+        detail: { stream, ticket_number: ticketNumber, reason: input.reason },
+      });
+      return data as QueueEntry;
+    }
+    lastError = error;
+    if (error && (error as { code?: string }).code !== "23505") {
+      throw error;
+    }
+  }
+  throw lastError instanceof Error ? lastError : new Error("Priority insert failed");
+}
+
+export async function callEntry(id: string, actor?: { id: string | null; label: string | null }): Promise<void> {
+  const supabase = getServerSupabase();
+
+  const { data: entry, error: fetchError } = await supabase
+    .from("queue_entries")
+    .select("visit_type")
+    .eq("id", id)
+    .single();
+  if (fetchError) throw fetchError;
+
+  // Only one "called" at a time per visit type -- demote previous.
+  await supabase
+    .from("queue_entries")
+    .update({ status: "seen", seen_at: new Date().toISOString() })
+    .in("status", ["called", "preparing"])
+    .eq("visit_type", entry.visit_type)
+    .neq("id", id);
+
   const { error } = await supabase
     .from("queue_entries")
     .update({ status: "called", called_at: new Date().toISOString() })
     .eq("id", id);
   if (error) throw error;
+
+  await writeAudit({
+    entry_id: id,
+    actor_id: actor?.id ?? null,
+    actor_label: actor?.label ?? null,
+    action: "call",
+  });
 }
 
-export async function markSeen(id: string): Promise<void> {
+export async function setPreparing(id: string, actor?: { id: string | null; label: string | null }): Promise<void> {
+  const supabase = getServerSupabase();
+  const { error } = await supabase
+    .from("queue_entries")
+    .update({ status: "preparing" })
+    .eq("id", id);
+  if (error) throw error;
+  await writeAudit({
+    entry_id: id,
+    actor_id: actor?.id ?? null,
+    actor_label: actor?.label ?? null,
+    action: "preparing",
+  });
+}
+
+export async function markSeen(id: string, actor?: { id: string | null; label: string | null }): Promise<void> {
   const supabase = getServerSupabase();
   const { error } = await supabase
     .from("queue_entries")
     .update({ status: "seen", seen_at: new Date().toISOString() })
     .eq("id", id);
   if (error) throw error;
+  await writeAudit({
+    entry_id: id,
+    actor_id: actor?.id ?? null,
+    actor_label: actor?.label ?? null,
+    action: "seen",
+  });
 }
 
-export async function resetToday(): Promise<void> {
+export async function setPharmacyNote(
+  id: string,
+  note: string,
+  actor?: { id: string | null; label: string | null },
+): Promise<void> {
+  const supabase = getServerSupabase();
+  const { error } = await supabase
+    .from("queue_entries")
+    .update({ pharmacy_notes: note.trim() || null })
+    .eq("id", id);
+  if (error) throw error;
+  await writeAudit({
+    entry_id: id,
+    actor_id: actor?.id ?? null,
+    actor_label: actor?.label ?? null,
+    action: "pharmacy_note",
+    detail: { note: note.trim() || null },
+  });
+}
+
+export interface TransferEntryInput {
+  id: string;
+  newVisitType: string;
+  hasPrescription?: HasPrescription | null;
+  actorId: string | null;
+  actorLabel: string | null;
+}
+
+export async function transferEntry(input: TransferEntryInput): Promise<QueueEntry> {
+  const supabase = getServerSupabase();
+  const { data: existing, error: fetchError } = await supabase
+    .from("queue_entries")
+    .select("*")
+    .eq("id", input.id)
+    .single();
+  if (fetchError || !existing) throw fetchError ?? new Error("Entry not found");
+  const e = existing as QueueEntry;
+
+  const newStream = streamFor(input.newVisitType);
+  const ticketNumber = await nextTicketNumber(newStream);
+  const nowIso = new Date().toISOString();
+
+  const updates: Record<string, unknown> = {
+    visit_type: input.newVisitType,
+    transferred_from: e.transferred_from ?? e.visit_type,
+    ticket_number: ticketNumber,
+    created_at: nowIso,  // bump to end of destination queue
+    status: "waiting",
+    called_at: null,
+    seen_at: null,
+  };
+  if (input.newVisitType === "pharmacy") {
+    updates.has_prescription = input.hasPrescription ?? e.has_prescription ?? null;
+  }
+
+  const { data, error } = await supabase
+    .from("queue_entries")
+    .update(updates)
+    .eq("id", input.id)
+    .select("*")
+    .single();
+  if (error) throw error;
+
+  await writeAudit({
+    entry_id: input.id,
+    actor_id: input.actorId,
+    actor_label: input.actorLabel,
+    action: "transfer",
+    detail: {
+      from_visit_type: e.visit_type,
+      to_visit_type: input.newVisitType,
+      original_created_at: e.created_at,
+      new_ticket_number: ticketNumber,
+    },
+  });
+
+  return data as QueueEntry;
+}
+
+export async function resetToday(actor?: { id: string | null; label: string | null }): Promise<void> {
   const supabase = getServerSupabase();
   const { error } = await supabase
     .from("queue_entries")
     .delete()
     .gte("created_at", startOfTodayIso());
   if (error) throw error;
+  await writeAudit({
+    entry_id: null,
+    actor_id: actor?.id ?? null,
+    actor_label: actor?.label ?? null,
+    action: "reset_day",
+  });
+}
+
+export async function listTodayAudit(limit = 50): Promise<unknown[]> {
+  const supabase = getServerSupabase();
+  const { data, error } = await supabase
+    .from("queue_audit")
+    .select("*")
+    .gte("created_at", startOfTodayIso())
+    .order("created_at", { ascending: false })
+    .limit(limit);
+  if (error) throw error;
+  return data ?? [];
 }
 
 export interface QueueViewModel {
@@ -112,23 +381,24 @@ export interface QueueViewModel {
   estimatedWaitMinutes: number;
 }
 
-export async function getQueueViewForToken(
-  token: string,
-): Promise<QueueViewModel | null> {
+export async function getQueueViewForToken(token: string): Promise<QueueViewModel | null> {
   const entry = await getEntryByToken(token);
   if (!entry) return null;
   return buildView(entry, await listTodayEntries());
 }
 
 export function buildView(entry: QueueEntry, today: QueueEntry[]): QueueViewModel {
+  const myStream = streamFor(entry.visit_type);
   const ahead =
     entry.status === "waiting"
-      ? today.filter(
-          (e) =>
-            e.status === "waiting" &&
-            new Date(e.created_at).getTime() <
-              new Date(entry.created_at).getTime(),
-        ).length
+      ? today.filter((e) => {
+          if (e.status !== "waiting") return false;
+          if (streamFor(e.visit_type) !== myStream) return false;
+          // Priority always ahead of non-priority.
+          if (e.priority && !entry.priority) return true;
+          if (!e.priority && entry.priority) return false;
+          return new Date(e.created_at).getTime() < new Date(entry.created_at).getTime();
+        }).length
       : 0;
   return {
     entry,
@@ -137,4 +407,4 @@ export function buildView(entry: QueueEntry, today: QueueEntry[]): QueueViewMode
   };
 }
 
-export { initials } from "./queue-client";
+export { initials, maskedDisplayName } from "./queue-client";

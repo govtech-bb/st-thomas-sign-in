@@ -1,4 +1,5 @@
-import { isStaffAuthenticated } from "@/lib/staff";
+import { redirect } from "next/navigation";
+import { getStaffSession } from "@/lib/auth-server";
 import { listTodayEntries } from "@/lib/queue";
 import { StaffLogin } from "@/components/StaffLogin";
 import { StaffQueue } from "@/components/StaffQueue";
@@ -10,9 +11,13 @@ interface Props {
 }
 
 export default async function StaffPage({ searchParams }: Props) {
-  if (!isStaffAuthenticated()) {
-    return <StaffLogin error={searchParams.error === "1"} />;
+  const session = await getStaffSession();
+  if (!session) {
+    return <StaffLogin error={searchParams.error} />;
+  }
+  if (session.role === "pharmacist") {
+    redirect("/pharmacy");
   }
   const entries = await listTodayEntries();
-  return <StaffQueue initialEntries={entries} />;
+  return <StaffQueue initialEntries={entries} role={session.role} email={session.email} />;
 }
