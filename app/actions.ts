@@ -23,7 +23,7 @@ export async function staffLoginAction(formData: FormData): Promise<void> {
   if (!verifyPin(pin)) {
     redirect("/staff?error=1");
   }
-  cookies().set(STAFF_COOKIE, pin, {
+  (await cookies()).set(STAFF_COOKIE, pin, {
     httpOnly: true,
     sameSite: "lax",
     secure: process.env.NODE_ENV === "production",
@@ -34,18 +34,18 @@ export async function staffLoginAction(formData: FormData): Promise<void> {
 }
 
 export async function staffLogoutAction(): Promise<void> {
-  cookies().delete(STAFF_COOKIE);
+  (await cookies()).delete(STAFF_COOKIE);
   redirect("/staff");
 }
 
-function requireStaff() {
-  if (!isStaffAuthenticated()) {
+async function requireStaff() {
+  if (!(await isStaffAuthenticated())) {
     throw new Error("Not authorised");
   }
 }
 
 export async function callPatientAction(formData: FormData): Promise<void> {
-  requireStaff();
+  await requireStaff();
   const id = String(formData.get("id") ?? "");
   if (!id) throw new Error("Missing id");
   await callEntry(id);
@@ -53,7 +53,7 @@ export async function callPatientAction(formData: FormData): Promise<void> {
 }
 
 export async function markSeenAction(formData: FormData): Promise<void> {
-  requireStaff();
+  await requireStaff();
   const id = String(formData.get("id") ?? "");
   if (!id) throw new Error("Missing id");
   await markSeen(id);
@@ -61,7 +61,7 @@ export async function markSeenAction(formData: FormData): Promise<void> {
 }
 
 export async function resetDayAction(): Promise<void> {
-  requireStaff();
+  await requireStaff();
   await resetToday();
   revalidatePath("/staff");
 }

@@ -6,12 +6,13 @@ import { StaffQueue } from "@/components/StaffQueue";
 export const dynamic = "force-dynamic";
 
 interface Props {
-  searchParams: { error?: string };
+  searchParams: Promise<{ error?: string }>;
 }
 
 export default async function StaffPage({ searchParams }: Props) {
-  if (!isStaffAuthenticated()) {
-    return <StaffLogin error={searchParams.error === "1"} />;
+  if (!(await isStaffAuthenticated())) {
+    const { error } = await searchParams;
+    return <StaffLogin error={error === "1"} />;
   }
   const entries = await listTodayEntries();
   return <StaffQueue initialEntries={entries} />;

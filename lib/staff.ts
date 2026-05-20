@@ -2,10 +2,10 @@ import { cookies } from "next/headers";
 
 export const STAFF_COOKIE = "stq_staff";
 
-export function isStaffAuthenticated(): boolean {
+export async function isStaffAuthenticated(): Promise<boolean> {
   const pin = process.env.STAFF_PIN;
   if (!pin) return false;
-  const cookie = cookies().get(STAFF_COOKIE);
+  const cookie = (await cookies()).get(STAFF_COOKIE);
   return cookie?.value === pin;
 }
 

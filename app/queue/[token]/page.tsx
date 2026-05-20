@@ -5,11 +5,12 @@ import { QueuePosition } from "@/components/QueuePosition";
 export const dynamic = "force-dynamic";
 
 interface Props {
-  params: { token: string };
+  params: Promise<{ token: string }>;
 }
 
 export default async function PersonalQueuePage({ params }: Props) {
-  const view = await getQueueViewForToken(params.token);
+  const { token } = await params;
+  const view = await getQueueViewForToken(token);
   if (!view) notFound();
 
   return (
