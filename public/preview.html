@@ -943,10 +943,12 @@ function updateDisplayClock() {
     weekday: 'long', day: 'numeric', month: 'long', year: 'numeric',
   });
   timeEl.textContent = now.toLocaleTimeString(undefined, {
-    hour: '2-digit', minute: '2-digit', second: '2-digit',
+    hour: '2-digit', minute: '2-digit', hour12: false,
   });
 }
-setInterval(updateDisplayClock, 1000);
+// 24-hour HH:MM only -- a 30 s tick is plenty since the minute display
+// only changes every 60 s.
+setInterval(updateDisplayClock, 30_000);
 
 let displayAudioCtx = null;
 let displayAudioUnlocked = false;
@@ -984,8 +986,9 @@ function announcePatient(entry) {
   const stream = streamFor(entry.visit_type);
   const where = stream === 'pharmacy' ? 'the pharmacy window' : 'the front desk';
   const ticket = entry.ticket_number ?? 0;
-  const masked = maskedName(entry.name);
-  const msg = new SpeechSynthesisUtterance(`Number ${ticket}, ${masked}. Please go to ${where}.`);
+  // Audio uses the full name. On-screen display still uses the masked
+  // form for privacy in the open waiting area.
+  const msg = new SpeechSynthesisUtterance(`Number ${ticket}, ${entry.name}. Please go to ${where}.`);
   msg.voice = voice;
   window.speechSynthesis.speak(msg);
 }
