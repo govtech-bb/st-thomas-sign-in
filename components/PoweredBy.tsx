@@ -4,27 +4,19 @@ interface Props {
   className?: string;
 }
 
-// Small "Powered by" line + the Government of Barbados wordmark. Rendered
-// at the bottom of patient-facing and staff-facing pages so the GovTech
-// origin is consistently surfaced.
+// "Powered by GovTech Barbados" line rendered at the bottom of every
+// user-facing surface. Text only -- no wordmark or emblem.
 export function PoweredBy({ variant = "light", className = "" }: Props) {
-  const textColor = variant === "dark" ? "text-slate-400" : "text-slate-500";
-  // The SVG uses fill="currentColor"; setting the wrapper's text color
-  // doesn't propagate through an <img>, so we use a CSS filter to flip
-  // it white on the dark display screen.
-  const logoStyle = variant === "dark" ? { filter: "brightness(0) invert(1)" } : undefined;
+  const captionColor = variant === "dark" ? "text-slate-400" : "text-slate-500";
+  const brandColor = variant === "dark" ? "text-slate-100" : "text-slate-700";
   return (
     <div className={`flex items-center justify-center gap-2 ${className}`}>
-      <span className={`text-xs uppercase tracking-wider ${textColor}`}>
+      <span className={`text-xs uppercase tracking-wider ${captionColor}`}>
         Powered by
       </span>
-      {/* eslint-disable-next-line @next/next/no-img-element */}
-      <img
-        src="/govbb-logo.svg"
-        alt="GovTech Barbados"
-        className="h-4 w-auto"
-        style={logoStyle}
-      />
+      <span className={`text-sm font-bold tracking-tight ${brandColor}`}>
+        GovTech Barbados
+      </span>
     </div>
   );
 }
