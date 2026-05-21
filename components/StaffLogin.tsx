@@ -1,4 +1,5 @@
 import { staffLoginAction } from "@/app/actions";
+import { PoweredBy } from "@/components/PoweredBy";
 
 interface Props {
   error?: string;
@@ -53,6 +54,8 @@ export function StaffLogin({ error }: Props) {
           Sign in
         </button>
       </form>
+
+      <PoweredBy className="mt-12" />
     </main>
   );
 }

@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState, useTransition } from "react";
 import { getBrowserSupabase } from "@/lib/supabase";
 import type { QueueEntry, StaffRole } from "@/lib/types";
 import { STREAM_LABELS, VISIT_TYPES, streamFor } from "@/lib/types";
+import { PoweredBy } from "@/components/PoweredBy";
 import {
   callPatientAction,
   markSeenAction,
@@ -324,6 +325,8 @@ export function StaffQueue({ initialEntries, role, email }: Props) {
           )}
         </section>
       )}
+
+      <PoweredBy className="mt-12" />
     </main>
   );
 }

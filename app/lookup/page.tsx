@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { LookupForm } from "@/components/LookupForm";
+import { PoweredBy } from "@/components/PoweredBy";
 
 interface Props {
   searchParams?: { q?: string };
@@ -28,6 +29,8 @@ export default function LookupPage({ searchParams }: Props) {
           Check in here
         </Link>
       </p>
+
+      <PoweredBy className="mt-12" />
     </main>
   );
 }

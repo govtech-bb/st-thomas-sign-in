@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState, useTransition } from "react";
 import { getBrowserSupabase } from "@/lib/supabase";
 import type { QueueEntry, StaffRole } from "@/lib/types";
+import { PoweredBy } from "@/components/PoweredBy";
 import {
   callPatientAction,
   markSeenAction,
@@ -271,6 +272,8 @@ export function PharmacyQueue({ initialEntries, email, role }: Props) {
           </ul>
         )}
       </section>
+
+      <PoweredBy className="mt-12" />
     </main>
   );
 }

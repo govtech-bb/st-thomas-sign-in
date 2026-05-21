@@ -2,6 +2,7 @@ import { headers } from "next/headers";
 import QRCodeLib from "qrcode";
 import { QRCode } from "@/components/QRCode";
 import { PrintButton } from "@/components/PrintButton";
+import { PoweredBy } from "@/components/PoweredBy";
 
 export const dynamic = "force-dynamic";
 
@@ -50,9 +51,12 @@ export default async function AdminQrPage() {
         <ol className="mt-8 space-y-2 text-base text-slate-700">
           <li>1. Open your phone camera and point it at the code.</li>
           <li>2. Tap the link that appears.</li>
-          <li>3. Enter your name and the reason for your visit.</li>
-          <li>4. Keep the page open to see your queue position.</li>
+          <li>3. Enter your name and the type of your visit.</li>
+          <li>4. Your queue position is on the next page.</li>
         </ol>
+        <div className="mt-10 border-t border-slate-200 pt-4">
+          <PoweredBy />
+        </div>
       </section>
     </main>
   );

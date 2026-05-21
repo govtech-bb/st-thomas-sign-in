@@ -1,4 +1,5 @@
 import { SignInForm } from "@/components/SignInForm";
+import { PoweredBy } from "@/components/PoweredBy";
 
 interface Props {
   searchParams?: { kiosk?: string };
@@ -26,6 +27,8 @@ export default function HomePage({ searchParams }: Props) {
         Your name is only shown to clinic staff. The waiting-room display shows your
         initials only.
       </footer>
+
+      <PoweredBy className="mt-8" />
     </main>
   );
 }

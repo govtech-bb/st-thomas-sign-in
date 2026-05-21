@@ -5,6 +5,7 @@ import { getBrowserSupabase } from "@/lib/supabase";
 import type { QueueEntry, Stream } from "@/lib/types";
 import { STREAM_LABELS, streamFor } from "@/lib/types";
 import { maskedDisplayName } from "@/lib/queue-client";
+import { PoweredBy } from "@/components/PoweredBy";
 
 interface Props {
   initialEntries: QueueEntry[];
@@ -268,6 +269,10 @@ export function QueueDisplay({ initialEntries }: Props) {
           </section>
         ))}
       </div>
+
+      <footer className="px-10 py-6">
+        <PoweredBy variant="dark" />
+      </footer>
     </div>
   );
 }

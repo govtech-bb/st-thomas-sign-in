@@ -2,6 +2,7 @@ import { headers } from "next/headers";
 import { notFound } from "next/navigation";
 import { getQueueViewForToken } from "@/lib/queue";
 import { QueuePosition } from "@/components/QueuePosition";
+import { PoweredBy } from "@/components/PoweredBy";
 
 export const dynamic = "force-dynamic";
 
@@ -84,6 +85,8 @@ export default async function PersonalQueuePage({ params }: Props) {
         If you have any questions, speak to a member of staff at the front desk and show
         them your reference code.
       </p>
+
+      <PoweredBy className="mt-12" />
     </main>
   );
 }
