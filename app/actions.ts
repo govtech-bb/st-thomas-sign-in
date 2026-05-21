@@ -13,7 +13,6 @@ import {
   setPreparing,
   transferEntry,
 } from "@/lib/queue";
-import { getEntryByToken } from "@/lib/queue";
 import { createSSRClient, getStaffSession, requireRole } from "@/lib/auth-server";
 import { VISIT_TYPE_VALUES } from "@/lib/types";
 import type { HasPrescription, StaffRole } from "@/lib/types";
@@ -188,30 +187,6 @@ export async function lookupPatientAction(formData: FormData): Promise<void> {
   redirect(`/queue/${entry.token}`);
 }
 
-// Patient-initiated transfer using only the token. No staff auth required:
-// possession of the token is the patient's authentication.
-export async function patientTransferAction(formData: FormData): Promise<void> {
-  const token = String(formData.get("token") ?? "").trim();
-  const newVisitType = String(formData.get("visit_type") ?? "").trim();
-  const rawPrescription = String(formData.get("has_prescription") ?? "").trim();
-  if (!token) throw new Error("Missing token");
-  if (!VISIT_TYPE_VALUES.includes(newVisitType as (typeof VISIT_TYPE_VALUES)[number])) {
-    throw new Error("Invalid visit type");
-  }
-  const entry = await getEntryByToken(token);
-  if (!entry) throw new Error("Queue entry not found");
-
-  const hasPrescription =
-    PRESCRIPTION_VALUES.includes(rawPrescription as HasPrescription)
-      ? (rawPrescription as HasPrescription)
-      : null;
-
-  await transferEntry({
-    id: entry.id,
-    newVisitType,
-    hasPrescription,
-    actorId: null,
-    actorLabel: `patient:${token}`,
-  });
-  redirect(`/queue/${token}`);
-}
+// Patients can no longer self-transfer (clinic feedback after the May 19
+// demo). All transfers now go through the staff/pharmacist dashboard via
+// staffTransferAction above.

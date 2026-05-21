@@ -59,7 +59,7 @@ export function SignInForm({ kiosk }: Props) {
       </div>
 
       <div>
-        <span className="field-label block mb-2">ID type</span>
+        <span className="field-label block mb-2">Identification Number</span>
         <div className="flex gap-3 mb-3">
           <label className="flex cursor-pointer items-center gap-2 rounded-md border px-4 py-2.5 text-sm font-medium has-[:checked]:border-brand has-[:checked]:bg-brand-light border-slate-300">
             <input
@@ -154,7 +154,7 @@ export function SignInForm({ kiosk }: Props) {
       )}
 
       <button type="submit" className="btn-primary w-full text-lg" disabled={pending}>
-        {pending ? "Signing in..." : "Join the queue"}
+        {pending ? "Checking in..." : "Check in"}
       </button>
     </form>
   );

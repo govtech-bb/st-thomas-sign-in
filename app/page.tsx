@@ -13,7 +13,7 @@ export default function HomePage({ searchParams }: Props) {
         <p className="text-sm font-semibold uppercase tracking-wide text-brand">
           St Thomas Outpatient Clinic
         </p>
-        <h1 className="mt-2 text-3xl font-bold leading-tight">Sign in for your visit</h1>
+        <h1 className="mt-2 text-3xl font-bold leading-tight">Check in for your visit</h1>
         <p className="mt-3 text-slate-600">
           Enter your name and the reason for your visit. You&apos;ll get a personal link
           to track your place in the queue from your phone.
@@ -26,7 +26,7 @@ export default function HomePage({ searchParams }: Props) {
         Your name is only shown to clinic staff. The waiting-room display shows your initials.
         <div className="mt-4">
           <a href="/lookup" className="text-sm font-semibold text-brand hover:underline">
-            Already signed in? Find my place in queue →
+            Already checked in? Find my place in queue →
           </a>
         </div>
       </footer>

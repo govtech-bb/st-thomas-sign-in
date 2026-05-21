@@ -1,16 +1,14 @@
 "use client";
 
-import { useEffect, useState, useTransition } from "react";
+import { useEffect, useMemo, useState, useTransition } from "react";
 import { getBrowserSupabase } from "@/lib/supabase";
 import type { QueueEntry, StaffRole } from "@/lib/types";
-import { VISIT_TYPES } from "@/lib/types";
 import {
   callPatientAction,
   markSeenAction,
   savePharmacyNoteAction,
   setPreparingAction,
   staffLogoutAction,
-  staffTransferAction,
 } from "@/app/actions";
 
 interface Props {
@@ -18,6 +16,8 @@ interface Props {
   email: string;
   role: StaffRole;
 }
+
+type Tab = "waiting" | "called" | "preparing" | "served";
 
 function formatTime(iso: string): string {
   return new Date(iso).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
@@ -45,11 +45,16 @@ function statusBadgeClass(status: string) {
   return "bg-emerald-100 text-emerald-800";
 }
 
+function sortQueueOrder(a: QueueEntry, b: QueueEntry) {
+  if (a.priority !== b.priority) return a.priority ? -1 : 1;
+  return new Date(a.created_at).getTime() - new Date(b.created_at).getTime();
+}
+
 export function PharmacyQueue({ initialEntries, email, role }: Props) {
   const [entries, setEntries] = useState<QueueEntry[]>(initialEntries);
   const [pending, startTransition] = useTransition();
   const [, setNow] = useState(Date.now());
-  const [openMoveFor, setOpenMoveFor] = useState<string | null>(null);
+  const [activeTab, setActiveTab] = useState<Tab>("waiting");
 
   useEffect(() => {
     const tick = setInterval(() => setNow(Date.now()), 30_000);
@@ -90,18 +95,22 @@ export function PharmacyQueue({ initialEntries, email, role }: Props) {
     startTransition(() => action(fd));
   }
 
-  function handleMove(id: string, visitType: string) {
-    const fd = new FormData();
-    fd.set("id", id);
-    fd.set("visit_type", visitType);
-    startTransition(() => staffTransferAction(fd));
-    setOpenMoveFor(null);
-  }
+  // Stats: Waiting / Called / Served. Called count includes preparing too,
+  // so the headline number matches what staff are working on right now.
+  const stats = useMemo(() => ({
+    waiting: entries.filter((e) => e.status === "waiting").length,
+    called: entries.filter((e) => e.status === "called" || e.status === "preparing").length,
+    served: entries.filter((e) => e.status === "seen").length,
+  }), [entries]);
 
-  const active = entries.filter((e) => e.status !== "seen");
-  const seen = entries.filter((e) => e.status === "seen");
-  const waiting = entries.filter((e) => e.status === "waiting").length;
-  const inProgress = entries.filter((e) => e.status === "called" || e.status === "preparing").length;
+  // Tab partitions
+  const byTab: Record<Tab, QueueEntry[]> = useMemo(() => ({
+    waiting: entries.filter((e) => e.status === "waiting").sort(sortQueueOrder),
+    called: entries.filter((e) => e.status === "called").sort(sortQueueOrder),
+    preparing: entries.filter((e) => e.status === "preparing").sort(sortQueueOrder),
+    served: entries.filter((e) => e.status === "seen")
+      .sort((a, b) => new Date(b.seen_at ?? 0).getTime() - new Date(a.seen_at ?? 0).getTime()),
+  }), [entries]);
 
   return (
     <main className="mx-auto max-w-4xl px-6 py-8">
@@ -120,138 +129,48 @@ export function PharmacyQueue({ initialEntries, email, role }: Props) {
         </form>
       </header>
 
-      <div className="grid grid-cols-3 gap-4 text-center mb-8">
-        <div className="rounded-lg bg-slate-50 p-4">
-          <div className="text-3xl font-bold">{waiting}</div>
-          <div className="text-sm text-slate-600">Waiting</div>
-        </div>
-        <div className="rounded-lg bg-slate-50 p-4">
-          <div className="text-3xl font-bold">{inProgress}</div>
-          <div className="text-sm text-slate-600">Called / preparing</div>
-        </div>
-        <div className="rounded-lg bg-slate-50 p-4">
-          <div className="text-3xl font-bold">{seen.length}</div>
-          <div className="text-sm text-slate-600">Served</div>
-        </div>
+      <div className="grid grid-cols-3 gap-4 text-center mb-6">
+        <Stat label="Waiting" value={stats.waiting} />
+        <Stat label="Called" value={stats.called} />
+        <Stat label="Served" value={stats.served} />
       </div>
 
-      <section>
-        <h2 className="text-lg font-semibold mb-3">Prescription queue</h2>
-        {active.length === 0 ? (
-          <p className="rounded-lg bg-slate-50 p-6 text-center text-slate-500">
-            No patients waiting.
-          </p>
-        ) : (
-          <ul className="space-y-3">
-            {active.map((e) => (
-              <li
-                key={e.id}
-                className={`rounded-lg border p-4 ${
-                  e.priority ? "border-red-300 bg-red-50/40" : "border-slate-200 bg-white"
+      <div className="border-b border-slate-200">
+        <nav className="-mb-px flex flex-wrap gap-6">
+          {(["waiting", "called", "preparing", "served"] as Tab[]).map((t) => {
+            const labelMap: Record<Tab, string> = {
+              waiting: `Waiting (${byTab.waiting.length})`,
+              called: `Called (${byTab.called.length})`,
+              preparing: `Being Prepared (${byTab.preparing.length})`,
+              served: `Served (${byTab.served.length})`,
+            };
+            const active = activeTab === t;
+            return (
+              <button
+                key={t}
+                type="button"
+                onClick={() => setActiveTab(t)}
+                className={`-mb-px border-b-2 px-1 pb-3 text-sm font-semibold ${
+                  active
+                    ? "border-brand text-brand"
+                    : "border-transparent text-slate-500 hover:border-slate-300 hover:text-slate-700"
                 }`}
               >
-                <div className="flex flex-wrap items-center gap-3">
-                  <span className="text-2xl font-bold text-brand">#{e.ticket_number ?? "—"}</span>
-                  <span className="text-lg font-semibold">{e.name}</span>
-                  <span className={`rounded-full px-2 py-0.5 text-xs font-semibold uppercase ${statusBadgeClass(e.status)}`}>
-                    {e.status}
-                  </span>
-                  {e.priority && (
-                    <span className="rounded-full bg-red-600 px-2 py-0.5 text-xs font-bold uppercase text-white">
-                      Priority
-                    </span>
-                  )}
-                  {e.transferred_from && (
-                    <span className="rounded-full bg-slate-200 px-2 py-0.5 text-[11px] font-medium text-slate-700">
-                      ← {e.transferred_from}
-                    </span>
-                  )}
-                </div>
-                <p className="mt-1 text-sm text-slate-500">
-                  {idTypeLabel((e as { id_type?: string }).id_type ?? "")}:{" "}
-                  <span className="font-medium text-slate-700">
-                    {(e as { id_number?: string }).id_number}
-                  </span>
-                  {" "}· Ref:{" "}
-                  <span className="font-mono tracking-widest">{e.token}</span>
-                  {" "}· Arrived {formatTime(e.created_at)}
-                  {" "}· {waitMinutes(e.created_at)} min waiting
-                </p>
-                <p className="mt-1 text-sm">
-                  <span className="text-slate-500">Prescription: </span>
-                  <span className="font-medium">{prescriptionLabel(e.has_prescription)}</span>
-                </p>
+                {labelMap[t]}
+              </button>
+            );
+          })}
+        </nav>
+      </div>
 
-                <NoteEditor entryId={e.id} initialValue={e.pharmacy_notes ?? ""} />
-
-                <div className="mt-3 flex flex-wrap gap-2">
-                  {e.status === "waiting" && (
-                    <button
-                      onClick={() => submitAction(callPatientAction, e.id)}
-                      disabled={pending}
-                      className="rounded-lg bg-brand px-4 py-2 text-sm font-semibold text-white hover:bg-brand-dark disabled:opacity-50"
-                    >
-                      Call
-                    </button>
-                  )}
-                  {e.status === "called" && (
-                    <button
-                      onClick={() => submitAction(setPreparingAction, e.id)}
-                      disabled={pending}
-                      className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700 disabled:opacity-50"
-                    >
-                      Mark preparing
-                    </button>
-                  )}
-                  {(e.status === "called" || e.status === "preparing") && (
-                    <button
-                      onClick={() => submitAction(markSeenAction, e.id)}
-                      disabled={pending}
-                      className="rounded-lg bg-emerald-600 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-700 disabled:opacity-50"
-                    >
-                      Mark served
-                    </button>
-                  )}
-                  <div className="relative">
-                    <button
-                      type="button"
-                      className="btn-secondary"
-                      disabled={pending}
-                      onClick={() =>
-                        setOpenMoveFor((curr) => (curr === e.id ? null : e.id))
-                      }
-                    >
-                      Move to…
-                    </button>
-                    {openMoveFor === e.id && (
-                      <div className="absolute right-0 z-10 mt-1 w-44 rounded-md border border-slate-200 bg-white shadow-lg">
-                        {VISIT_TYPES.filter((v) => v.value !== "pharmacy").map((v) => (
-                          <button
-                            key={v.value}
-                            type="button"
-                            className="block w-full px-3 py-2 text-left text-sm hover:bg-slate-100"
-                            onClick={() => handleMove(e.id, v.value)}
-                          >
-                            {v.label}
-                          </button>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                </div>
-              </li>
-            ))}
-          </ul>
-        )}
-      </section>
-
-      {seen.length > 0 && (
-        <section className="mt-8">
-          <h2 className="text-lg font-semibold text-slate-500 mb-3">
-            Served today ({seen.length})
-          </h2>
+      <section className="mt-4">
+        {byTab[activeTab].length === 0 ? (
+          <p className="rounded-lg bg-slate-50 p-6 text-center text-slate-500">
+            No patients in the {activeTab === "preparing" ? "being prepared" : activeTab} list.
+          </p>
+        ) : activeTab === "served" ? (
           <ul className="divide-y divide-slate-200 rounded-lg border border-slate-200 text-sm text-slate-600">
-            {seen.map((e) => (
+            {byTab.served.map((e) => (
               <li key={e.id} className="flex items-center justify-between p-3">
                 <div>
                   <span className="font-mono text-slate-400">#{e.ticket_number ?? "—"}</span>{" "}
@@ -266,9 +185,102 @@ export function PharmacyQueue({ initialEntries, email, role }: Props) {
               </li>
             ))}
           </ul>
-        </section>
-      )}
+        ) : (
+          <ul className="space-y-3">
+            {byTab[activeTab].map((e) => {
+              const isWaiting = e.status === "waiting";
+              const isCalled = e.status === "called";
+              const isPreparing = e.status === "preparing";
+              return (
+                <li
+                  key={e.id}
+                  className={`rounded-lg border p-4 ${
+                    e.priority ? "border-red-300 bg-red-50/40" : "border-slate-200 bg-white"
+                  }`}
+                >
+                  <div className="flex flex-wrap items-center gap-3">
+                    <span className="text-2xl font-bold text-brand">#{e.ticket_number ?? "—"}</span>
+                    <span className="text-lg font-semibold">{e.name}</span>
+                    <span className={`rounded-full px-2 py-0.5 text-xs font-semibold uppercase ${statusBadgeClass(e.status)}`}>
+                      {e.status}
+                    </span>
+                    {e.priority && (
+                      <span className="rounded-full bg-red-600 px-2 py-0.5 text-xs font-bold uppercase text-white">
+                        Priority
+                      </span>
+                    )}
+                    {e.transferred_from && (
+                      <span className="rounded-full bg-slate-200 px-2 py-0.5 text-[11px] font-medium text-slate-700">
+                        ← {e.transferred_from}
+                      </span>
+                    )}
+                  </div>
+                  <p className="mt-1 text-sm text-slate-500">
+                    {idTypeLabel((e as { id_type?: string }).id_type ?? "")}:{" "}
+                    <span className="font-medium text-slate-700">
+                      {(e as { id_number?: string }).id_number}
+                    </span>
+                    {" "}· Ref:{" "}
+                    <span className="font-mono tracking-widest">{e.token}</span>
+                    {" "}· Arrived {formatTime(e.created_at)}
+                    {" "}· {waitMinutes(e.created_at)} min waiting
+                  </p>
+                  <p className="mt-1 text-sm">
+                    <span className="text-slate-500">Prescription: </span>
+                    <span className="font-medium">{prescriptionLabel(e.has_prescription)}</span>
+                  </p>
+
+                  {/* Notes editor only shown once interaction has begun. */}
+                  {!isWaiting && (
+                    <NoteEditor entryId={e.id} initialValue={e.pharmacy_notes ?? ""} />
+                  )}
+
+                  <div className="mt-3 flex flex-wrap gap-2">
+                    {/* Single-button-at-a-time progression: Call → Mark preparing → Mark served. */}
+                    {isWaiting && (
+                      <button
+                        onClick={() => submitAction(callPatientAction, e.id)}
+                        disabled={pending}
+                        className="rounded-lg bg-brand px-4 py-2 text-sm font-semibold text-white hover:bg-brand-dark disabled:opacity-50"
+                      >
+                        Call
+                      </button>
+                    )}
+                    {isCalled && (
+                      <button
+                        onClick={() => submitAction(setPreparingAction, e.id)}
+                        disabled={pending}
+                        className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700 disabled:opacity-50"
+                      >
+                        Mark preparing
+                      </button>
+                    )}
+                    {isPreparing && (
+                      <button
+                        onClick={() => submitAction(markSeenAction, e.id)}
+                        disabled={pending}
+                        className="rounded-lg bg-emerald-600 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-700 disabled:opacity-50"
+                      >
+                        Mark served
+                      </button>
+                    )}
+                  </div>
+                </li>
+              );
+            })}
+          </ul>
+        )}
+      </section>
     </main>
+  );
+}
+
+function Stat({ label, value }: { label: string; value: number }) {
+  return (
+    <div className="rounded-lg bg-slate-50 p-4">
+      <div className="text-3xl font-bold">{value}</div>
+      <div className="text-sm text-slate-600">{label}</div>
+    </div>
   );
 }
 

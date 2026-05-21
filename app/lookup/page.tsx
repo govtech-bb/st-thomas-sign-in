@@ -17,9 +17,9 @@ export default function LookupPage() {
       <LookupForm />
 
       <p className="mt-6 text-center text-sm text-slate-500">
-        Not signed in yet?{" "}
+        Not checked in yet?{" "}
         <Link href="/" className="font-semibold text-brand hover:underline">
-          Sign in here
+          Check in here
         </Link>
       </p>
     </main>

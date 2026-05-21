@@ -55,6 +55,23 @@ function waitMinutes(iso: string, now: number): number {
   return Math.max(0, Math.floor((now - new Date(iso).getTime()) / 60000));
 }
 
+function formatDate(now: number): string {
+  return new Date(now).toLocaleDateString(undefined, {
+    weekday: "long",
+    day: "numeric",
+    month: "long",
+    year: "numeric",
+  });
+}
+
+function formatClock(now: number): string {
+  return new Date(now).toLocaleTimeString(undefined, {
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+  });
+}
+
 // Top 3 currently called or preparing, freshest first. Priority entries are
 // hidden from the public display per spec.
 function topCalled(entries: QueueEntry[]): QueueEntry[] {
@@ -91,7 +108,8 @@ export function QueueDisplay({ initialEntries }: Props) {
   }
 
   useEffect(() => {
-    const interval = setInterval(() => setNow(Date.now()), 30_000);
+    // 1s tick drives the wall-clock display in the header.
+    const interval = setInterval(() => setNow(Date.now()), 1000);
     return () => clearInterval(interval);
   }, []);
 
@@ -175,11 +193,21 @@ export function QueueDisplay({ initialEntries }: Props) {
         </button>
       )}
 
-      <header className="border-b border-slate-800 px-10 py-6">
-        <p className="text-sm font-semibold uppercase tracking-[0.2em] text-brand">
-          St Thomas OPC
-        </p>
-        <h1 className="mt-1 text-4xl font-bold">Patient Queue</h1>
+      <header className="flex items-end justify-between gap-6 border-b border-slate-800 px-10 py-6">
+        <div>
+          <p className="text-sm font-semibold uppercase tracking-[0.2em] text-brand">
+            St Thomas OPC
+          </p>
+          <h1 className="mt-1 text-4xl font-bold">Patient Queue</h1>
+        </div>
+        <div className="text-right">
+          <p className="text-sm uppercase tracking-widest text-slate-400" suppressHydrationWarning>
+            {formatDate(now)}
+          </p>
+          <p className="mt-1 font-mono text-4xl font-bold tabular-nums" suppressHydrationWarning>
+            {formatClock(now)}
+          </p>
+        </div>
       </header>
 
       {calledNow.length > 0 && (
