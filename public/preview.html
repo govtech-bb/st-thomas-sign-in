@@ -162,7 +162,7 @@
 <!-- ============================== STAFF LOGIN ============================== -->
 <section data-view="stafflogin">
   <main class="mx-auto flex min-h-screen max-w-sm flex-col justify-center px-6 py-10">
-    <h1 class="text-2xl font-bold">Staff sign-in</h1>
+    <h1 class="text-2xl font-bold">Clinic sign-in</h1>
     <p class="mt-2 text-slate-600">Sign in with your clinic email. Demo password: <code class="rounded bg-slate-100 px-1 text-sm">DemoPass1!</code></p>
     <form id="staff-login-form" class="mt-6 space-y-4" novalidate>
       <div>
@@ -192,7 +192,7 @@
   <main class="mx-auto max-w-5xl px-6 py-8">
     <header class="flex items-center justify-between gap-4">
       <div>
-        <p class="text-sm font-semibold uppercase tracking-wide text-brand">Staff dashboard</p>
+        <p class="text-sm font-semibold uppercase tracking-wide text-brand">Clinic dashboard</p>
         <h1 class="mt-1 text-3xl font-bold">Today's queue</h1>
         <p class="mt-1 text-sm text-slate-500" id="staff-whoami">Signed in</p>
       </div>
@@ -214,7 +214,6 @@
         <select name="visit_type" required class="field-input">
           <option value="general">General</option>
           <option value="follow-up">Follow-up</option>
-          <option value="pharmacy">Pharmacy</option>
           <option value="other">Other</option>
         </select>
         <input name="reason" required placeholder="Reason (e.g. police escort)" class="field-input" />
@@ -324,7 +323,7 @@
     <div class="flex flex-wrap gap-1">
       <button data-go="signin" class="nav-btn rounded-md px-3 py-2 text-sm font-medium text-slate-600 hover:bg-slate-100">Check in</button>
       <button data-go="display" class="nav-btn rounded-md px-3 py-2 text-sm font-medium text-slate-600 hover:bg-slate-100">Display</button>
-      <button data-go="stafflogin" class="nav-btn rounded-md px-3 py-2 text-sm font-medium text-slate-600 hover:bg-slate-100">Staff</button>
+      <button data-go="stafflogin" class="nav-btn rounded-md px-3 py-2 text-sm font-medium text-slate-600 hover:bg-slate-100">Clinic</button>
       <button data-go="pharmacy" class="nav-btn rounded-md px-3 py-2 text-sm font-medium text-slate-600 hover:bg-slate-100">Pharmacy</button>
       <button data-go="qr" class="nav-btn rounded-md px-3 py-2 text-sm font-medium text-slate-600 hover:bg-slate-100">QR code</button>
     </div>
@@ -1036,7 +1035,10 @@ function renderDisplay() {
   const newlyCalled = called.filter(e => !displayVisibleCalledIds.has(e.id));
   if (newlyCalled.length > 0 && displayAudioUnlocked) {
     playChime();
+    // Call the name twice with a gap, so a patient who missed the
+    // first announcement still hears the second.
     setTimeout(() => newlyCalled.forEach(announcePatient), 1100);
+    setTimeout(() => newlyCalled.forEach(announcePatient), 5500);
   }
   displayVisibleCalledIds = currentIds;
   document.getElementById('d-called').innerHTML = called.map(e => {
@@ -1098,10 +1100,13 @@ let staffActiveTab = 'waiting'; // 'waiting' | 'called' | 'seen'
 function renderStaff() {
   if (!state.staff || state.staff.role === 'pharmacist') return;
   document.getElementById('staff-whoami').textContent = `Signed in as ${state.staff.email} (${state.staff.role})`;
+  // Clinic dashboard is scoped to the clinical stream only. Pharmacy
+  // entries are handled exclusively on /pharmacy.
+  const clinicalEntries = state.entries.filter(e => streamFor(e.visit_type) !== 'pharmacy');
   const stats = {
-    waiting: state.entries.filter(e => e.status === 'waiting').length,
-    called: state.entries.filter(e => e.status === 'called' || e.status === 'preparing').length,
-    seen: state.entries.filter(e => e.status === 'seen').length,
+    waiting: clinicalEntries.filter(e => e.status === 'waiting').length,
+    called: clinicalEntries.filter(e => e.status === 'called' || e.status === 'preparing').length,
+    seen: clinicalEntries.filter(e => e.status === 'seen').length,
   };
   document.getElementById('staff-stats').innerHTML = `
     ${statCard('Waiting', stats.waiting)}
@@ -1125,9 +1130,9 @@ function renderStaff() {
   });
 
   const byTab = {
-    waiting: state.entries.filter(e => e.status === 'waiting').sort(sortQueueOrder),
-    called: state.entries.filter(e => e.status === 'called' || e.status === 'preparing').sort(sortQueueOrder),
-    seen: state.entries.filter(e => e.status === 'seen').sort((a,b) => new Date(b.seen_at||0) - new Date(a.seen_at||0)),
+    waiting: clinicalEntries.filter(e => e.status === 'waiting').sort(sortQueueOrder),
+    called: clinicalEntries.filter(e => e.status === 'called' || e.status === 'preparing').sort(sortQueueOrder),
+    seen: clinicalEntries.filter(e => e.status === 'seen').sort((a,b) => new Date(b.seen_at||0) - new Date(a.seen_at||0)),
   };
   const list = byTab[staffActiveTab];
   const content = document.getElementById('staff-tab-content');

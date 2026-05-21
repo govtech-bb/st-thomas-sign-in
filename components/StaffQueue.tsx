@@ -73,20 +73,27 @@ export function StaffQueue({ initialEntries, role, email }: Props) {
     return () => { void supabase.removeChannel(channel); };
   }, []);
 
+  // Clinic dashboard is scoped to the clinical stream only. Pharmacy
+  // entries are handled exclusively on /pharmacy.
+  const clinicalEntries = useMemo(
+    () => entries.filter((e) => streamFor(e.visit_type) !== "pharmacy"),
+    [entries],
+  );
+
   // Stats: Waiting / Called / Seen. Called includes preparing for the count.
   const stats = useMemo(() => ({
-    waiting: entries.filter((e) => e.status === "waiting").length,
-    called: entries.filter((e) => e.status === "called" || e.status === "preparing").length,
-    seen: entries.filter((e) => e.status === "seen").length,
-  }), [entries]);
+    waiting: clinicalEntries.filter((e) => e.status === "waiting").length,
+    called: clinicalEntries.filter((e) => e.status === "called" || e.status === "preparing").length,
+    seen: clinicalEntries.filter((e) => e.status === "seen").length,
+  }), [clinicalEntries]);
 
   // Tab partitions
   const byTab: Record<Tab, QueueEntry[]> = useMemo(() => ({
-    waiting: entries.filter((e) => e.status === "waiting").sort(sortQueueOrder),
-    called: entries.filter((e) => e.status === "called" || e.status === "preparing").sort(sortQueueOrder),
-    seen: entries.filter((e) => e.status === "seen")
+    waiting: clinicalEntries.filter((e) => e.status === "waiting").sort(sortQueueOrder),
+    called: clinicalEntries.filter((e) => e.status === "called" || e.status === "preparing").sort(sortQueueOrder),
+    seen: clinicalEntries.filter((e) => e.status === "seen")
       .sort((a, b) => new Date(b.seen_at ?? 0).getTime() - new Date(a.seen_at ?? 0).getTime()),
-  }), [entries]);
+  }), [clinicalEntries]);
 
   function submitAction(action: (fd: FormData) => Promise<void>, id: string) {
     const fd = new FormData();
@@ -111,7 +118,7 @@ export function StaffQueue({ initialEntries, role, email }: Props) {
       <header className="flex items-center justify-between gap-4">
         <div>
           <p className="text-sm font-semibold uppercase tracking-wide text-brand">
-            Staff dashboard
+            Clinic dashboard
           </p>
           <h1 className="mt-1 text-3xl font-bold">Today&apos;s queue</h1>
           <p className="mt-1 text-sm text-slate-500">
@@ -370,7 +377,7 @@ function PriorityInsertForm({ onDone }: { onDone: () => void }) {
           className="field-input"
         />
         <select name="visit_type" required defaultValue="general" className="field-input">
-          {VISIT_TYPES.map((v) => (
+          {VISIT_TYPES.filter((v) => v.value !== "pharmacy").map((v) => (
             <option key={v.value} value={v.value}>{v.label}</option>
           ))}
         </select>

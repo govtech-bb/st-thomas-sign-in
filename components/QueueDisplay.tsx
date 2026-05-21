@@ -135,9 +135,10 @@ export function QueueDisplay({ initialEntries }: Props) {
 
       if (newlyVisible.length > 0 && audioCtxRef.current) {
         playChime(audioCtxRef.current);
-        setTimeout(() => {
-          newlyVisible.forEach((e) => announcePatient(e));
-        }, 1100);
+        // Call the name twice with a gap, so a patient who missed the
+        // first announcement still hears the second.
+        setTimeout(() => newlyVisible.forEach((e) => announcePatient(e)), 1100);
+        setTimeout(() => newlyVisible.forEach((e) => announcePatient(e)), 5500);
       }
 
       visibleCalledIdsRef.current = new Set(visible.map((e) => e.id));

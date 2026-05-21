@@ -16,7 +16,7 @@ export function StaffLogin({ error }: Props) {
   const msg = errorMessage(error);
   return (
     <main className="mx-auto flex min-h-screen max-w-sm flex-col justify-center px-6 py-10">
-      <h1 className="text-2xl font-bold">Staff sign-in</h1>
+      <h1 className="text-2xl font-bold">Clinic sign-in</h1>
       <p className="mt-2 text-slate-600">
         Sign in with your clinic email to access the queue dashboard.
       </p>
