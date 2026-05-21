@@ -40,7 +40,7 @@
   <main class="mx-auto flex min-h-screen max-w-md flex-col px-6 py-10">
     <header class="mb-8">
       <p class="text-sm font-semibold uppercase tracking-wide text-brand">St Thomas Outpatient Clinic</p>
-      <h1 class="mt-2 text-3xl font-bold leading-tight">Sign in for your visit</h1>
+      <h1 class="mt-2 text-3xl font-bold leading-tight">Check in for your visit</h1>
       <p class="mt-3 text-slate-600">Enter your name and the reason for your visit. You'll get a personal link to track your place in the queue from your phone.</p>
     </header>
 
@@ -50,7 +50,7 @@
         <input id="si-name" required maxlength="120" class="field-input" placeholder="e.g. Karen Williams" />
       </div>
       <div>
-        <span class="field-label block mb-2">ID type</span>
+        <span class="field-label block mb-2">Identification Number</span>
         <div class="flex gap-3 mb-3">
           <label class="flex cursor-pointer items-center gap-2 rounded-md border px-4 py-2.5 text-sm font-medium has-[:checked]:border-brand has-[:checked]:bg-brand-light border-slate-300">
             <input type="radio" name="si-id-type" value="national_id" checked class="h-4 w-4 accent-emerald-700" /> National ID #
@@ -75,14 +75,14 @@
 
       <div id="si-error" role="alert" class="hidden rounded-md bg-red-50 px-4 py-3 text-red-700"></div>
 
-      <button type="submit" class="btn-primary w-full text-lg">Join the queue</button>
+      <button type="submit" class="btn-primary w-full text-lg">Check in</button>
     </form>
 
     <footer class="mt-12 text-center text-xs text-slate-500">
       Your name is only shown to clinic staff. The waiting-room display shows your initials.
       <div class="mt-4">
         <button type="button" data-go="lookup" class="nav-btn text-sm font-semibold text-brand hover:underline">
-          Already signed in? Find my place in queue →
+          Already checked in? Find my place in queue →
         </button>
       </div>
     </footer>
@@ -111,21 +111,6 @@
       </div>
     </dl>
 
-    <div id="q-transfer-box" class="mt-6 rounded-xl border border-slate-200 p-5 hidden">
-      <p class="text-sm font-semibold text-slate-700">Need to visit another department?</p>
-      <p class="mt-1 text-sm text-slate-500">You'll be placed at the end of the new queue.</p>
-      <div class="mt-3 flex flex-wrap gap-2" id="q-transfer-buttons"></div>
-      <div id="q-prescription-prompt" class="mt-4 rounded-md border border-slate-200 bg-slate-50 p-3 hidden">
-        <p class="text-sm font-medium text-slate-700">Do you have a prescription?</p>
-        <div class="mt-2 flex flex-wrap gap-2">
-          <button type="button" data-rx="yes" class="rx-pick rounded-md bg-brand px-3 py-1.5 text-sm font-semibold text-white">Paper in hand</button>
-          <button type="button" data-rx="electronic" class="rx-pick rounded-md bg-brand px-3 py-1.5 text-sm font-semibold text-white">Electronic on file</button>
-          <button type="button" data-rx="no" class="rx-pick rounded-md bg-brand px-3 py-1.5 text-sm font-semibold text-white">No prescription</button>
-          <button type="button" id="rx-cancel" class="rounded-md bg-slate-200 px-3 py-1.5 text-sm font-semibold text-slate-700">Cancel</button>
-        </div>
-      </div>
-    </div>
-
     <p class="mt-12 text-xs text-slate-500">Trouble with the queue? Speak to a member of staff at the front desk and show them your reference code.</p>
   </main>
 </section>
@@ -138,9 +123,15 @@
       <span class="text-2xl font-semibold">Tap to enable sound</span>
       <span class="text-slate-400">Required for patient call alerts</span>
     </button>
-    <header class="border-b border-slate-800 px-10 py-6">
-      <p class="text-sm font-semibold uppercase tracking-[0.2em] text-emerald-400">St Thomas OPC</p>
-      <h1 class="mt-1 text-4xl font-bold">Patient Queue</h1>
+    <header class="flex items-end justify-between gap-6 border-b border-slate-800 px-10 py-6">
+      <div>
+        <p class="text-sm font-semibold uppercase tracking-[0.2em] text-emerald-400">St Thomas OPC</p>
+        <h1 class="mt-1 text-4xl font-bold">Patient Queue</h1>
+      </div>
+      <div class="text-right">
+        <p class="text-sm uppercase tracking-widest text-slate-400" id="d-date">—</p>
+        <p class="mt-1 font-mono text-4xl font-bold tabular-nums" id="d-time">—</p>
+      </div>
     </header>
     <div class="mx-10 mt-8 flex flex-wrap gap-4" id="d-called"></div>
     <div class="grid grid-cols-1 gap-6 px-10 py-8 lg:grid-cols-2" id="d-columns"></div>
@@ -213,14 +204,12 @@
       </div>
     </form>
 
-    <section class="mt-8">
-      <h2 class="text-lg font-semibold">Active queue</h2>
-      <div id="staff-active"></div>
-    </section>
+    <div class="mt-8 border-b border-slate-200">
+      <nav class="-mb-px flex gap-6" id="staff-tabs"></nav>
+    </div>
 
-    <section class="mt-8 hidden" id="staff-seen-section">
-      <h2 class="text-lg font-semibold text-slate-500" id="staff-seen-heading">Seen today</h2>
-      <div id="staff-seen"></div>
+    <section class="mt-4">
+      <div id="staff-tab-content"></div>
     </section>
 
     <section class="mt-10 rounded-lg border border-red-200 bg-red-50 p-6 hidden" id="staff-reset-section">
@@ -243,16 +232,14 @@
       <button id="pharm-signout" class="btn-secondary">Sign out</button>
     </header>
 
-    <div class="grid grid-cols-3 gap-4 text-center mb-8" id="pharm-stats"></div>
+    <div class="grid grid-cols-3 gap-4 text-center mb-6" id="pharm-stats"></div>
 
-    <section>
-      <h2 class="text-lg font-semibold mb-3">Prescription queue</h2>
-      <div id="pharm-active"></div>
-    </section>
+    <div class="border-b border-slate-200">
+      <nav class="-mb-px flex flex-wrap gap-6" id="pharm-tabs"></nav>
+    </div>
 
-    <section class="mt-8 hidden" id="pharm-seen-section">
-      <h2 class="text-lg font-semibold text-slate-500 mb-3" id="pharm-seen-heading">Served today</h2>
-      <div id="pharm-seen"></div>
+    <section class="mt-4">
+      <div id="pharm-tab-content"></div>
     </section>
   </main>
 </section>
@@ -274,8 +261,8 @@
       <button type="submit" class="btn-primary w-full text-lg">Find my place</button>
     </form>
     <p class="mt-6 text-center text-sm text-slate-500">
-      Not signed in yet?
-      <button type="button" data-go="signin" class="nav-btn font-semibold text-brand hover:underline">Sign in here</button>
+      Not checked in yet?
+      <button type="button" data-go="signin" class="nav-btn font-semibold text-brand hover:underline">Check in here</button>
     </p>
   </main>
 </section>
@@ -314,7 +301,7 @@
   <div class="mx-auto flex max-w-3xl items-center justify-between gap-2 px-4 py-1">
     <span class="text-[10px] font-semibold uppercase tracking-widest text-slate-400">Demo</span>
     <div class="flex flex-wrap gap-1">
-      <button data-go="signin" class="nav-btn rounded-md px-3 py-2 text-sm font-medium text-slate-600 hover:bg-slate-100">Sign in</button>
+      <button data-go="signin" class="nav-btn rounded-md px-3 py-2 text-sm font-medium text-slate-600 hover:bg-slate-100">Check in</button>
       <button data-go="display" class="nav-btn rounded-md px-3 py-2 text-sm font-medium text-slate-600 hover:bg-slate-100">Display</button>
       <button data-go="stafflogin" class="nav-btn rounded-md px-3 py-2 text-sm font-medium text-slate-600 hover:bg-slate-100">Staff</button>
       <button data-go="pharmacy" class="nav-btn rounded-md px-3 py-2 text-sm font-medium text-slate-600 hover:bg-slate-100">Pharmacy</button>
@@ -711,14 +698,12 @@ function renderQueue() {
   const box = document.getElementById('q-status-box');
   const ref = document.getElementById('q-ref');
   const visit = document.getElementById('q-visit-type');
-  const transferBox = document.getElementById('q-transfer-box');
 
   if (!entry) {
     greet.textContent = 'No active queue entry';
-    box.innerHTML = `<section class="rounded-xl bg-slate-50 p-8 text-center"><p class="text-slate-600">Sign in first to see your queue position.</p></section>`;
+    box.innerHTML = `<section class="rounded-xl bg-slate-50 p-8 text-center"><p class="text-slate-600">Check in first to see your queue position.</p></section>`;
     ref.textContent = '—';
     visit.textContent = '—';
-    transferBox.classList.add('hidden');
     return;
   }
 
@@ -726,7 +711,6 @@ function renderQueue() {
   ref.textContent = entry.token;
   visit.textContent = entry.visit_type;
 
-  const ticketLabel = entry.ticket_number ? `#${entry.ticket_number}` : '—';
   const stream = streamFor(entry.visit_type);
   const where = stream === 'pharmacy' ? 'the pharmacy window' : 'the desk';
 
@@ -735,8 +719,7 @@ function renderQueue() {
     box.innerHTML = `
       <section class="rounded-xl bg-amber-100 p-8 text-center ring-4 ring-amber-400">
         <p class="text-sm font-semibold uppercase tracking-wide text-amber-700">${label}</p>
-        <p class="mt-2 text-5xl font-black text-amber-900">${ticketLabel}</p>
-        <h2 class="mt-3 text-2xl font-bold text-amber-900">Please go to ${where}</h2>
+        <h2 class="mt-3 text-3xl font-bold text-amber-900">Please go to ${where}</h2>
       </section>`;
   } else if (entry.status === 'seen') {
     box.innerHTML = `
@@ -752,45 +735,34 @@ function renderQueue() {
       && !(entry.priority && !e.priority)
     ).length;
     const position = ahead + 1;
+    const wait = ahead * 8;
     box.innerHTML = `
       <section class="rounded-xl bg-brand-light p-8 text-center">
-        <p class="text-sm font-semibold uppercase tracking-wide text-brand">Your ticket</p>
-        <p class="mt-1 text-6xl font-black text-brand-dark">${ticketLabel}</p>
-        <p class="mt-4 text-sm font-semibold uppercase tracking-wide text-brand">Position in queue</p>
-        <p class="mt-1 text-4xl font-bold text-brand-dark">${position}</p>
+        <p class="text-sm font-semibold uppercase tracking-wide text-brand">Your queue position</p>
+        <p class="mt-2 text-7xl font-bold text-brand-dark">${position}</p>
         <p class="mt-3 text-slate-700">${ahead === 0 ? "You're next." : `${ahead} ${ahead === 1 ? 'person' : 'people'} ahead of you`}</p>
-        ${ahead > 0 ? `<p class="mt-1 text-sm text-slate-500">Estimated wait: about ${ahead * 8} minute${ahead === 1 ? '' : 's'}</p>` : ''}
+        ${ahead > 0 ? `<p class="mt-1 text-sm text-slate-500">Estimated wait: about ${wait} minute${wait === 1 ? '' : 's'}</p>` : ''}
       </section>`;
   }
-
-  // Transfer buttons (always show unless seen and want to skip — show even after seen)
-  transferBox.classList.remove('hidden');
-  const others = VISIT_TYPES.filter(v => v.value !== entry.visit_type);
-  document.getElementById('q-transfer-buttons').innerHTML = others.map(v =>
-    `<button type="button" data-vt="${v.value}" class="q-xfer rounded-lg border border-brand px-4 py-2 text-sm font-semibold text-brand hover:bg-brand-light">Move to ${v.label}</button>`
-  ).join('');
-  document.getElementById('q-prescription-prompt').classList.add('hidden');
-  document.querySelectorAll('.q-xfer').forEach(b => {
-    b.addEventListener('click', () => {
-      const vt = b.dataset.vt;
-      if (vt === 'pharmacy') {
-        document.getElementById('q-prescription-prompt').classList.remove('hidden');
-        document.querySelectorAll('.rx-pick').forEach(rxBtn => {
-          rxBtn.onclick = () => { transferEntry(entry.id, 'pharmacy', rxBtn.dataset.rx); };
-        });
-      } else {
-        transferEntry(entry.id, vt);
-      }
-    });
-  });
-  document.getElementById('rx-cancel').onclick = () => {
-    document.getElementById('q-prescription-prompt').classList.add('hidden');
-  };
 }
 
 // ============================================================
 // Display
 // ============================================================
+function updateDisplayClock() {
+  const now = new Date();
+  const dateEl = document.getElementById('d-date');
+  const timeEl = document.getElementById('d-time');
+  if (!dateEl || !timeEl) return;
+  dateEl.textContent = now.toLocaleDateString(undefined, {
+    weekday: 'long', day: 'numeric', month: 'long', year: 'numeric',
+  });
+  timeEl.textContent = now.toLocaleTimeString(undefined, {
+    hour: '2-digit', minute: '2-digit', second: '2-digit',
+  });
+}
+setInterval(updateDisplayClock, 1000);
+
 let displayAudioCtx = null;
 let displayAudioUnlocked = false;
 let displayVisibleCalledIds = new Set();
@@ -933,6 +905,8 @@ document.getElementById('staff-login-form').addEventListener('submit', (e) => {
 // ============================================================
 // Staff dashboard
 // ============================================================
+let staffActiveTab = 'waiting'; // 'waiting' | 'called' | 'seen'
+
 function renderStaff() {
   if (!state.staff || state.staff.role === 'pharmacist') return;
   document.getElementById('staff-whoami').textContent = `Signed in as ${state.staff.email} (${state.staff.role})`;
@@ -943,23 +917,44 @@ function renderStaff() {
   };
   document.getElementById('staff-stats').innerHTML = `
     ${statCard('Waiting', stats.waiting)}
-    ${statCard('With staff', stats.called)}
+    ${statCard('Called', stats.called)}
     ${statCard('Seen', stats.seen)}
   `;
-  const active = state.entries.filter(e => e.status !== 'seen').sort(sortQueueOrder);
-  document.getElementById('staff-active').innerHTML = active.length === 0
-    ? `<p class="mt-3 rounded-lg bg-slate-50 p-6 text-center text-slate-500">No patients waiting.</p>`
-    : `<ul class="mt-3 divide-y divide-slate-200 rounded-lg border border-slate-200">${active.map(staffRow).join('')}</ul>`;
-  wireStaffRowButtons();
 
-  const seen = state.entries.filter(e => e.status === 'seen').sort((a,b) => new Date(b.seen_at||0) - new Date(a.seen_at||0));
-  document.getElementById('staff-seen-section').classList.toggle('hidden', seen.length === 0);
-  document.getElementById('staff-seen-heading').textContent = `Seen today (${seen.length})`;
-  document.getElementById('staff-seen').innerHTML = `<ul class="mt-3 divide-y divide-slate-200 rounded-lg border border-slate-200 text-sm text-slate-600">${seen.map(e => `
-    <li class="flex items-center justify-between p-3">
-      <span><span class="font-mono text-slate-400">#${e.ticket_number ?? '—'}</span> ${e.name}</span>
-      <span class="text-slate-400">${e.seen_at ? fmtTime(e.seen_at) : ''}</span>
-    </li>`).join('')}</ul>`;
+  const tabs = [
+    { id: 'waiting', label: `Waiting (${stats.waiting})` },
+    { id: 'called', label: `Called (${stats.called})` },
+    { id: 'seen', label: `Seen (${stats.seen})` },
+  ];
+  document.getElementById('staff-tabs').innerHTML = tabs.map(t => {
+    const active = staffActiveTab === t.id;
+    return `<button type="button" data-staff-tab="${t.id}" class="-mb-px border-b-2 px-1 pb-3 text-sm font-semibold ${
+      active ? 'border-brand text-brand' : 'border-transparent text-slate-500 hover:border-slate-300 hover:text-slate-700'
+    }">${t.label}</button>`;
+  }).join('');
+  document.querySelectorAll('[data-staff-tab]').forEach(b => {
+    b.addEventListener('click', () => { staffActiveTab = b.dataset.staffTab; renderStaff(); });
+  });
+
+  const byTab = {
+    waiting: state.entries.filter(e => e.status === 'waiting').sort(sortQueueOrder),
+    called: state.entries.filter(e => e.status === 'called' || e.status === 'preparing').sort(sortQueueOrder),
+    seen: state.entries.filter(e => e.status === 'seen').sort((a,b) => new Date(b.seen_at||0) - new Date(a.seen_at||0)),
+  };
+  const list = byTab[staffActiveTab];
+  const content = document.getElementById('staff-tab-content');
+  if (list.length === 0) {
+    content.innerHTML = `<p class="rounded-lg bg-slate-50 p-6 text-center text-slate-500">No patients ${staffActiveTab === 'seen' ? 'seen yet today' : `in the ${staffActiveTab} list`}.</p>`;
+  } else if (staffActiveTab === 'seen') {
+    content.innerHTML = `<ul class="divide-y divide-slate-200 rounded-lg border border-slate-200 text-sm text-slate-600">${list.map(e => `
+      <li class="flex items-center justify-between p-3">
+        <span><span class="font-mono text-slate-400">#${e.ticket_number ?? '—'}</span> ${escapeHtml(e.name)}</span>
+        <span class="text-slate-400">${e.seen_at ? fmtTime(e.seen_at) : ''}</span>
+      </li>`).join('')}</ul>`;
+  } else {
+    content.innerHTML = `<ul class="divide-y divide-slate-200 rounded-lg border border-slate-200">${list.map(staffRow).join('')}</ul>`;
+    wireStaffRowButtons();
+  }
 
   document.getElementById('staff-reset-section').classList.toggle('hidden', state.staff.role !== 'admin');
 }
@@ -972,12 +967,22 @@ function statCard(label, value) {
 }
 function staffRow(e) {
   const stream = streamFor(e.visit_type);
+  const wasCalled = e.status === 'called' || e.status === 'preparing';
   const statusBadge = {
     waiting: 'bg-slate-100 text-slate-700',
     called: 'bg-amber-100 text-amber-800',
     preparing: 'bg-blue-100 text-blue-800',
     seen: 'bg-emerald-100 text-emerald-800',
   }[e.status];
+  // C6: single action button per row. C9: Move to is "Move to pharmacy"
+  // and only appears for non-pharmacy patients after they've been called.
+  const actions = !wasCalled
+    ? `<button data-act="call" data-id="${e.id}" class="btn-primary">Call</button>`
+    : `<button data-act="seen" data-id="${e.id}" class="btn-primary">Mark seen</button>${
+        stream !== 'pharmacy'
+          ? `<button data-act="movepharm" data-id="${e.id}" class="btn-secondary">Move to pharmacy</button>`
+          : ''
+      }`;
   return `
     <li class="grid grid-cols-1 gap-3 p-4 sm:grid-cols-[3.5rem_1fr_auto] sm:items-center ${e.priority ? 'border-l-4 border-red-500 bg-red-50/40' : ''}">
       <div class="flex flex-col items-start">
@@ -996,32 +1001,17 @@ function staffRow(e) {
         </p>
         ${e.priority && e.priority_reason ? `<p class="mt-1 text-xs text-red-700">Priority reason: ${escapeHtml(e.priority_reason)}</p>` : ''}
       </div>
-      <div class="flex flex-wrap gap-2 sm:justify-end">
-        ${e.status === 'waiting' ? `<button data-act="call" data-id="${e.id}" class="btn-primary">Call</button>` : ''}
-        ${(e.status === 'called' || e.status === 'preparing') ? `<button data-act="seen" data-id="${e.id}" class="btn-primary">Mark seen</button>` : ''}
-        <div class="relative">
-          <button data-act="movetoggle" data-id="${e.id}" class="btn-secondary">Move to…</button>
-          <div data-move-menu="${e.id}" class="absolute right-0 z-10 mt-1 w-44 rounded-md border border-slate-200 bg-white shadow-lg hidden">
-            ${VISIT_TYPES.filter(v => v.value !== e.visit_type).map(v =>
-              `<button data-act="move" data-id="${e.id}" data-vt="${v.value}" class="block w-full px-3 py-2 text-left text-sm hover:bg-slate-100">${v.label}</button>`
-            ).join('')}
-          </div>
-        </div>
-      </div>
+      <div class="flex flex-wrap gap-2 sm:justify-end">${actions}</div>
     </li>`;
 }
 function wireStaffRowButtons() {
-  document.querySelectorAll('#staff-active [data-act]').forEach(btn => {
+  document.querySelectorAll('#staff-tab-content [data-act]').forEach(btn => {
     btn.addEventListener('click', () => {
       const id = btn.dataset.id;
       const act = btn.dataset.act;
       if (act === 'call') callEntry(id);
       else if (act === 'seen') markSeen(id);
-      else if (act === 'movetoggle') {
-        const menu = document.querySelector(`[data-move-menu="${id}"]`);
-        if (menu) menu.classList.toggle('hidden');
-      }
-      else if (act === 'move') transferEntry(id, btn.dataset.vt);
+      else if (act === 'movepharm') transferEntry(id, 'pharmacy');
     });
   });
 }
@@ -1053,31 +1043,60 @@ document.getElementById('staff-reset-btn').addEventListener('click', () => {
 // ============================================================
 // Pharmacy dashboard
 // ============================================================
+let pharmActiveTab = 'waiting'; // 'waiting' | 'called' | 'preparing' | 'served'
+
 function renderPharmacy() {
   if (!state.staff || (state.staff.role !== 'pharmacist' && state.staff.role !== 'admin')) return;
   document.getElementById('pharm-whoami').textContent = `Signed in as ${state.staff.email} (${state.staff.role})`;
   const list = state.entries.filter(e => e.visit_type === 'pharmacy').sort(sortQueueOrder);
-  const waiting = list.filter(e => e.status === 'waiting').length;
-  const inProgress = list.filter(e => e.status === 'called' || e.status === 'preparing').length;
-  const seen = list.filter(e => e.status === 'seen');
+  const stats = {
+    waiting: list.filter(e => e.status === 'waiting').length,
+    called: list.filter(e => e.status === 'called' || e.status === 'preparing').length,
+    served: list.filter(e => e.status === 'seen').length,
+  };
   document.getElementById('pharm-stats').innerHTML = `
-    ${statCard('Waiting', waiting)}
-    ${statCard('Called / preparing', inProgress)}
-    ${statCard('Served', seen.length)}
+    ${statCard('Waiting', stats.waiting)}
+    ${statCard('Called', stats.called)}
+    ${statCard('Served', stats.served)}
   `;
-  const active = list.filter(e => e.status !== 'seen');
-  document.getElementById('pharm-active').innerHTML = active.length === 0
-    ? `<p class="rounded-lg bg-slate-50 p-6 text-center text-slate-500">No patients waiting.</p>`
-    : `<ul class="space-y-3">${active.map(pharmRow).join('')}</ul>`;
-  wirePharmRowButtons();
 
-  document.getElementById('pharm-seen-section').classList.toggle('hidden', seen.length === 0);
-  document.getElementById('pharm-seen-heading').textContent = `Served today (${seen.length})`;
-  document.getElementById('pharm-seen').innerHTML = `<ul class="divide-y divide-slate-200 rounded-lg border border-slate-200 text-sm text-slate-600">${seen.map(e => `
-    <li class="flex items-center justify-between p-3">
-      <div><span class="font-mono text-slate-400">#${e.ticket_number ?? '—'}</span> <span class="font-medium">${e.name}</span></div>
-      <span class="text-slate-400">${e.seen_at ? fmtTime(e.seen_at) : ''}</span>
-    </li>`).join('')}</ul>`;
+  const byTab = {
+    waiting: list.filter(e => e.status === 'waiting'),
+    called: list.filter(e => e.status === 'called'),
+    preparing: list.filter(e => e.status === 'preparing'),
+    served: list.filter(e => e.status === 'seen')
+      .sort((a, b) => new Date(b.seen_at || 0) - new Date(a.seen_at || 0)),
+  };
+  const tabs = [
+    { id: 'waiting', label: `Waiting (${byTab.waiting.length})` },
+    { id: 'called', label: `Called (${byTab.called.length})` },
+    { id: 'preparing', label: `Being Prepared (${byTab.preparing.length})` },
+    { id: 'served', label: `Served (${byTab.served.length})` },
+  ];
+  document.getElementById('pharm-tabs').innerHTML = tabs.map(t => {
+    const active = pharmActiveTab === t.id;
+    return `<button type="button" data-pharm-tab="${t.id}" class="-mb-px border-b-2 px-1 pb-3 text-sm font-semibold ${
+      active ? 'border-brand text-brand' : 'border-transparent text-slate-500 hover:border-slate-300 hover:text-slate-700'
+    }">${t.label}</button>`;
+  }).join('');
+  document.querySelectorAll('[data-pharm-tab]').forEach(b => {
+    b.addEventListener('click', () => { pharmActiveTab = b.dataset.pharmTab; renderPharmacy(); });
+  });
+
+  const content = document.getElementById('pharm-tab-content');
+  const rows = byTab[pharmActiveTab];
+  if (rows.length === 0) {
+    content.innerHTML = `<p class="rounded-lg bg-slate-50 p-6 text-center text-slate-500">No patients in the ${pharmActiveTab === 'preparing' ? 'being prepared' : pharmActiveTab} list.</p>`;
+  } else if (pharmActiveTab === 'served') {
+    content.innerHTML = `<ul class="divide-y divide-slate-200 rounded-lg border border-slate-200 text-sm text-slate-600">${rows.map(e => `
+      <li class="flex items-center justify-between p-3">
+        <div><span class="font-mono text-slate-400">#${e.ticket_number ?? '—'}</span> <span class="font-medium">${escapeHtml(e.name)}</span></div>
+        <span class="text-slate-400">${e.seen_at ? fmtTime(e.seen_at) : ''}</span>
+      </li>`).join('')}</ul>`;
+  } else {
+    content.innerHTML = `<ul class="space-y-3">${rows.map(pharmRow).join('')}</ul>`;
+    wirePharmRowButtons();
+  }
 }
 function rxLabel(v) {
   if (v === 'yes') return 'Paper in hand';
@@ -1092,6 +1111,22 @@ function pharmRow(e) {
     preparing: 'bg-blue-100 text-blue-800',
     seen: 'bg-emerald-100 text-emerald-800',
   }[e.status];
+  // C6 single-action progression: Call → Mark preparing → Mark served.
+  // C12: no Move to button at all on the pharmacy dashboard.
+  const action = e.status === 'waiting'
+    ? `<button data-pact="call" data-id="${e.id}" class="btn-primary">Call</button>`
+    : e.status === 'called'
+    ? `<button data-pact="prep" data-id="${e.id}" class="rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white">Mark preparing</button>`
+    : `<button data-pact="seen" data-id="${e.id}" class="rounded-lg bg-emerald-600 px-4 py-2 text-sm font-semibold text-white">Mark served</button>`;
+  // Notes editor only after interaction starts (called/preparing).
+  const notesBlock = e.status === 'waiting' ? '' : `
+      <div class="mt-3 rounded-md border border-slate-200 bg-slate-50 p-3">
+        <label class="block text-xs font-semibold uppercase tracking-wider text-slate-500">Fulfilment notes</label>
+        <textarea data-note-id="${e.id}" rows="2" placeholder="e.g. Pulled — awaiting verification" class="mt-1 w-full rounded-md border border-slate-300 px-2 py-1 text-sm">${escapeHtml(e.pharmacy_notes ?? '')}</textarea>
+        <div class="mt-2 flex items-center gap-2">
+          <button data-save-note="${e.id}" class="rounded-md bg-slate-700 px-3 py-1 text-xs font-semibold text-white">Save note</button>
+        </div>
+      </div>`;
   return `
     <li class="rounded-lg border p-4 ${e.priority ? 'border-red-300 bg-red-50/40' : 'border-slate-200 bg-white'}">
       <div class="flex flex-wrap items-center gap-3">
@@ -1103,43 +1138,21 @@ function pharmRow(e) {
       </div>
       <p class="mt-1 text-sm text-slate-500">${e.id_type === 'passport' ? 'Passport' : 'National ID'}: <span class="font-medium text-slate-700">${escapeHtml(e.id_number)}</span> · Ref: <span class="font-mono tracking-widest">${e.token}</span> · Arrived ${fmtTime(e.created_at)} · ${waitMinutes(e.created_at)} min waiting</p>
       <p class="mt-1 text-sm"><span class="text-slate-500">Prescription:</span> <span class="font-medium">${rxLabel(e.has_prescription)}</span></p>
-      <div class="mt-3 rounded-md border border-slate-200 bg-slate-50 p-3">
-        <label class="block text-xs font-semibold uppercase tracking-wider text-slate-500">Fulfilment notes</label>
-        <textarea data-note-id="${e.id}" rows="2" placeholder="e.g. Pulled — awaiting verification" class="mt-1 w-full rounded-md border border-slate-300 px-2 py-1 text-sm">${escapeHtml(e.pharmacy_notes ?? '')}</textarea>
-        <div class="mt-2 flex items-center gap-2">
-          <button data-save-note="${e.id}" class="rounded-md bg-slate-700 px-3 py-1 text-xs font-semibold text-white">Save note</button>
-        </div>
-      </div>
-      <div class="mt-3 flex flex-wrap gap-2">
-        ${e.status === 'waiting' ? `<button data-pact="call" data-id="${e.id}" class="btn-primary">Call</button>` : ''}
-        ${e.status === 'called' ? `<button data-pact="prep" data-id="${e.id}" class="rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white">Mark preparing</button>` : ''}
-        ${(e.status === 'called' || e.status === 'preparing') ? `<button data-pact="seen" data-id="${e.id}" class="rounded-lg bg-emerald-600 px-4 py-2 text-sm font-semibold text-white">Mark served</button>` : ''}
-        <div class="relative">
-          <button data-pact="movetoggle" data-id="${e.id}" class="btn-secondary">Move to…</button>
-          <div data-pmove="${e.id}" class="absolute right-0 z-10 mt-1 w-44 rounded-md border border-slate-200 bg-white shadow-lg hidden">
-            ${VISIT_TYPES.filter(v => v.value !== 'pharmacy').map(v =>
-              `<button data-pact="move" data-id="${e.id}" data-vt="${v.value}" class="block w-full px-3 py-2 text-left text-sm hover:bg-slate-100">${v.label}</button>`
-            ).join('')}
-          </div>
-        </div>
-      </div>
+      ${notesBlock}
+      <div class="mt-3 flex flex-wrap gap-2">${action}</div>
     </li>`;
 }
 function wirePharmRowButtons() {
-  document.querySelectorAll('#pharm-active [data-pact]').forEach(btn => {
+  document.querySelectorAll('#pharm-tab-content [data-pact]').forEach(btn => {
     btn.addEventListener('click', () => {
       const id = btn.dataset.id;
       const act = btn.dataset.pact;
       if (act === 'call') callEntry(id);
       else if (act === 'prep') setPreparing(id);
       else if (act === 'seen') markSeen(id);
-      else if (act === 'movetoggle') {
-        const menu = document.querySelector(`[data-pmove="${id}"]`);
-        if (menu) menu.classList.toggle('hidden');
-      } else if (act === 'move') transferEntry(id, btn.dataset.vt);
     });
   });
-  document.querySelectorAll('[data-save-note]').forEach(btn => {
+  document.querySelectorAll('#pharm-tab-content [data-save-note]').forEach(btn => {
     btn.addEventListener('click', () => {
       const id = btn.dataset.saveNote;
       const note = document.querySelector(`[data-note-id="${id}"]`).value;
@@ -1223,6 +1236,7 @@ function render() {
   renderStaff();
   renderPharmacy();
   renderQr();
+  updateDisplayClock();
 }
 function escapeHtml(s) {
   return (s ?? '').toString().replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
