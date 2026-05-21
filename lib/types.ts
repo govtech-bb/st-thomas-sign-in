@@ -55,7 +55,7 @@ export interface QueueAuditRow {
 }
 
 export const VISIT_TYPES: { value: VisitType; label: string; description: string }[] = [
-  { value: "general", label: "General", description: "For new health concerns or symptoms you haven't been seen for before." },
+  { value: "general", label: "General", description: "For consultations, referrals, or new concerns not covered by the options below." },
   { value: "follow-up", label: "Follow-up", description: "A return visit to check on a previous condition or treatment." },
   { value: "pharmacy", label: "Pharmacy", description: "To collect or enquire about a prescription or medication." },
   { value: "other", label: "Other", description: "For any visit not covered by the options above." },

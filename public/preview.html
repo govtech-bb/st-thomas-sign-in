@@ -41,50 +41,59 @@
     <header class="mb-8">
       <p class="text-sm font-semibold uppercase tracking-wide text-brand">St Thomas Outpatient Clinic</p>
       <h1 class="mt-2 text-3xl font-bold leading-tight">Check in for your visit</h1>
-      <p class="mt-3 text-slate-600">Enter your name and the reason for your visit. You'll get a personal link to track your place in the queue from your phone.</p>
+      <p class="mt-3 text-slate-600">Enter your name and the type of your visit to join the queue. You can find your place again at any time using your name, ID number, or reference code.</p>
     </header>
 
     <form id="signin-form" class="space-y-6" novalidate>
+      <div id="si-summary" class="hidden rounded-md border-l-4 border-red-600 bg-red-50 p-4" tabindex="-1" role="alert">
+        <h2 class="text-base font-bold text-red-800">There is a problem</h2>
+        <ul class="mt-2 list-disc space-y-1 pl-5 text-sm text-red-700" id="si-summary-list"></ul>
+      </div>
+
       <div>
         <label for="si-name" class="field-label">Your name</label>
-        <input id="si-name" required maxlength="120" class="field-input" placeholder="e.g. Karen Williams" />
+        <input id="si-name" maxlength="120" class="field-input" placeholder="e.g. Karen Williams" />
+        <p id="si-name-error" class="mt-1 hidden text-sm font-medium text-red-700"></p>
       </div>
       <div>
         <span class="field-label block mb-2">Identification Number</span>
         <div class="flex gap-3 mb-3">
           <label class="flex cursor-pointer items-center gap-2 rounded-md border px-4 py-2.5 text-sm font-medium has-[:checked]:border-brand has-[:checked]:bg-brand-light border-slate-300">
-            <input type="radio" name="si-id-type" value="national_id" checked class="h-4 w-4 accent-emerald-700" /> National ID #
+            <input type="radio" name="si-id-type" value="national_id" checked class="h-4 w-4 accent-emerald-700" /> National ID number
           </label>
           <label class="flex cursor-pointer items-center gap-2 rounded-md border px-4 py-2.5 text-sm font-medium has-[:checked]:border-brand has-[:checked]:bg-brand-light border-slate-300">
             <input type="radio" name="si-id-type" value="passport" class="h-4 w-4 accent-emerald-700" /> Passport Number
           </label>
         </div>
-        <input id="si-id-number" required maxlength="30" class="field-input" placeholder="e.g. 1234567890" />
+        <input id="si-id-number" maxlength="30" class="field-input" placeholder="e.g. 1234567890" />
+        <p id="si-id-number-error" class="mt-1 hidden text-sm font-medium text-red-700"></p>
+        <p id="si-duplicate" class="mt-1 hidden text-sm font-medium text-red-700"></p>
       </div>
       <fieldset>
         <legend class="field-label">Type of visit</legend>
         <div class="mt-3 space-y-2" id="si-visit-types">
           <!-- populated by JS -->
         </div>
+        <p id="si-visit-type-error" class="mt-2 hidden text-sm font-medium text-red-700"></p>
       </fieldset>
 
       <fieldset id="si-prescription-fs" class="hidden">
         <legend class="field-label">Do you have a prescription?</legend>
         <div class="mt-3 space-y-2" id="si-prescription-opts"></div>
+        <p id="si-has-prescription-error" class="mt-2 hidden text-sm font-medium text-red-700"></p>
       </fieldset>
 
-      <div id="si-error" role="alert" class="hidden rounded-md bg-red-50 px-4 py-3 text-red-700"></div>
-
       <button type="submit" class="btn-primary w-full text-lg">Check in</button>
-    </form>
 
-    <footer class="mt-12 text-center text-xs text-slate-500">
-      Your name is only shown to clinic staff. The waiting-room display shows your initials.
-      <div class="mt-4">
-        <button type="button" data-go="lookup" class="nav-btn text-sm font-semibold text-brand hover:underline">
+      <div class="mt-4 text-center">
+        <button type="button" data-go="lookup" class="nav-btn block w-full text-sm font-semibold text-brand hover:underline">
           Already checked in? Find my place in queue →
         </button>
       </div>
+    </form>
+
+    <footer class="mt-12 text-center text-xs text-slate-500">
+      Your name is only shown to clinic staff. The waiting-room display shows your initials only.
     </footer>
   </main>
 </section>
@@ -95,7 +104,8 @@
     <header class="mb-6">
       <p class="text-sm font-semibold uppercase tracking-wide text-brand">St Thomas Outpatient Clinic</p>
       <h1 class="mt-2 text-2xl font-bold" id="q-greeting">Hi</h1>
-      <p class="mt-1 text-slate-600">Keep this page open. It updates automatically as the queue moves.</p>
+      <p class="mt-1 text-slate-600">You can return to this page at any time to check your position.</p>
+      <p class="mt-3 text-sm text-slate-500" id="q-summary"></p>
     </header>
 
     <div id="q-status-box"></div>
@@ -111,7 +121,18 @@
       </div>
     </dl>
 
-    <p class="mt-12 text-xs text-slate-500">Trouble with the queue? Speak to a member of staff at the front desk and show them your reference code.</p>
+    <section class="mt-8 rounded-lg border border-slate-200 bg-slate-50 p-4">
+      <h2 class="text-sm font-bold text-slate-800">How to find your place again</h2>
+      <p class="mt-1 text-sm text-slate-600">
+        Go to <a id="q-lookup-url" class="font-semibold text-brand hover:underline" href="#">your lookup URL</a> and enter your name, ID number, or reference code.
+      </p>
+    </section>
+
+    <p class="mt-8 text-sm text-slate-600">
+      Take a seat in the waiting area. You will be called by name when it is your turn.
+      If you have any questions, speak to a member of staff at the front desk and show
+      them your reference code.
+    </p>
   </main>
 </section>
 
@@ -250,14 +271,14 @@
     <header class="mb-8">
       <p class="text-sm font-semibold uppercase tracking-wide text-brand">St Thomas Outpatient Clinic</p>
       <h1 class="mt-2 text-3xl font-bold leading-tight">Find my place in queue</h1>
-      <p class="mt-3 text-slate-600">Enter the ID number you used when you signed in and we'll take you back to your queue position.</p>
+      <p class="mt-3 text-slate-600">Enter your name, ID number, or reference code and we'll show you your place in the queue.</p>
     </header>
     <form id="lookup-form" class="space-y-5" novalidate>
       <div>
-        <label class="field-label" for="lk-id-number">Your National ID # or Passport Number</label>
-        <input id="lk-id-number" required maxlength="30" class="field-input" placeholder="Enter the ID you used to sign in" />
+        <label class="field-label" for="lk-id-number">Your name, ID number, or reference code</label>
+        <input id="lk-id-number" maxlength="120" class="field-input" placeholder="e.g. Karen Williams, 1234567890, or X6AU" />
+        <p id="lk-error" role="alert" class="mt-1 hidden text-sm font-medium text-red-700"></p>
       </div>
-      <div id="lk-error" role="alert" class="hidden rounded-md bg-red-50 px-4 py-3 text-red-700"></div>
       <button type="submit" class="btn-primary w-full text-lg">Find my place</button>
     </form>
     <p class="mt-6 text-center text-sm text-slate-500">
@@ -316,7 +337,7 @@
 // ============================================================
 const STORAGE_KEY = 'stthomas-queue-preview-v1';
 const VISIT_TYPES = [
-  { value: 'general', label: 'General', description: "For new health concerns or symptoms you haven't been seen for before." },
+  { value: 'general', label: 'General', description: 'For consultations, referrals, or new concerns not covered by the options below.' },
   { value: 'follow-up', label: 'Follow-up', description: 'A return visit to check on a previous condition or treatment.' },
   { value: 'pharmacy', label: 'Pharmacy', description: 'To collect or enquire about a prescription or medication.' },
   { value: 'other', label: 'Other', description: 'For any visit not covered by the options above.' },
@@ -630,59 +651,204 @@ document.querySelectorAll('.nav-btn').forEach(b => {
 // ============================================================
 function renderSigninForm() {
   const wrap = document.getElementById('si-visit-types');
-  wrap.innerHTML = VISIT_TYPES.map(v => `
+  // First radio gets a stable id so the summary anchor can focus it.
+  wrap.innerHTML = VISIT_TYPES.map((v, i) => `
     <label class="flex cursor-pointer items-start gap-3 rounded-md border border-slate-300 px-4 py-3 text-base has-[:checked]:border-brand has-[:checked]:bg-brand-light">
-      <input type="radio" name="si-visit-type" value="${v.value}" required class="mt-0.5 h-5 w-5 shrink-0 accent-emerald-700" />
+      <input ${i === 0 ? 'id="visit-type-general"' : ''} type="radio" name="si-visit-type" value="${v.value}" class="mt-0.5 h-5 w-5 shrink-0 accent-emerald-700" />
       <span class="flex flex-col">
         <span class="font-medium">${v.label}</span>
         <span class="text-sm text-slate-500">${v.description}</span>
       </span>
     </label>
   `).join('');
-  wrap.querySelectorAll('input').forEach(r => r.addEventListener('change', updatePrescriptionVisibility));
+  wrap.querySelectorAll('input').forEach(r => {
+    r.addEventListener('change', () => {
+      updatePrescriptionVisibility();
+      siClearFieldError('visit-type');
+    });
+  });
+
   const opts = document.getElementById('si-prescription-opts');
-  // No HTML5 `required` -- the fieldset is hidden by default, and a hidden
-  // required radio silently blocks form submit. JS validation in the
-  // submit handler enforces the prescription pick when pharmacy is chosen.
-  opts.innerHTML = PRESCRIPTION_OPTIONS.map(o => `
+  opts.innerHTML = PRESCRIPTION_OPTIONS.map((o, i) => `
     <label class="flex cursor-pointer items-start gap-3 rounded-md border border-slate-300 px-4 py-3 text-base has-[:checked]:border-brand has-[:checked]:bg-brand-light">
-      <input type="radio" name="si-rx" value="${o.value}" class="mt-0.5 h-5 w-5 shrink-0 accent-emerald-700" />
+      <input ${i === 0 ? 'id="has-prescription-yes"' : ''} type="radio" name="si-rx" value="${o.value}" class="mt-0.5 h-5 w-5 shrink-0 accent-emerald-700" />
       <span class="flex flex-col"><span class="font-medium">${o.label}</span><span class="text-sm text-slate-500">${o.description}</span></span>
     </label>
   `).join('');
+  opts.querySelectorAll('input').forEach(r => {
+    r.addEventListener('change', () => siClearFieldError('has-prescription'));
+  });
+
+  // ID-type radios drive the placeholder of the ID input.
+  document.querySelectorAll('input[name="si-id-type"]').forEach(r => {
+    r.addEventListener('change', () => {
+      const sel = document.querySelector('input[name="si-id-type"]:checked').value;
+      document.getElementById('si-id-number').placeholder =
+        sel === 'national_id' ? 'e.g. 1234567890' : 'e.g. A1234567';
+    });
+  });
 }
 function updatePrescriptionVisibility() {
   const picked = document.querySelector('input[name="si-visit-type"]:checked');
   const show = picked && picked.value === 'pharmacy';
   document.getElementById('si-prescription-fs').classList.toggle('hidden', !show);
 }
+// --- Sign-in: full-form validation with summary, inline errors, reactive clear -----
+const SI_FIELDS = ['name', 'id-number', 'visit-type', 'has-prescription'];
+const SI_FIELD_META = {
+  'name': { input: 'si-name', label: 'Your name', emptyMsg: 'Enter a name that is at least 2 characters.' },
+  'id-number': { input: 'si-id-number', label: 'Identification number', emptyMsg: 'Enter your ID number.' },
+  'visit-type': { input: 'visit-type-general', label: 'Type of visit', emptyMsg: 'Choose a type of visit.' },
+  'has-prescription': { input: 'has-prescription-yes', label: 'Prescription', emptyMsg: 'Tell us about your prescription.' },
+};
+
+function siFindDuplicate(idNumber) {
+  return state.entries.find(e =>
+    e.id_number === idNumber && e.status !== 'seen'
+  );
+}
+
+function siShowFieldError(field, msg) {
+  const el = document.getElementById(`si-${field}-error`);
+  if (!el) return;
+  el.textContent = msg;
+  el.classList.remove('hidden');
+  // Highlight the input/fieldset border too
+  const input = document.getElementById(SI_FIELD_META[field].input);
+  if (input && input.tagName === 'INPUT' && input.type !== 'radio') input.classList.add('border-red-500');
+}
+
+function siClearFieldError(field) {
+  const el = document.getElementById(`si-${field}-error`);
+  if (el) {
+    el.textContent = '';
+    el.classList.add('hidden');
+  }
+  const input = document.getElementById(SI_FIELD_META[field].input);
+  if (input && input.tagName === 'INPUT' && input.type !== 'radio') input.classList.remove('border-red-500');
+  siRefreshSummary();
+}
+
+function siClearAllErrors() {
+  SI_FIELDS.forEach(siClearFieldError);
+  document.getElementById('si-duplicate').classList.add('hidden');
+  document.getElementById('si-id-number').classList.remove('border-red-500');
+  siRefreshSummary();
+}
+
+function siRefreshSummary() {
+  const summary = document.getElementById('si-summary');
+  const list = document.getElementById('si-summary-list');
+  const errors = [];
+  SI_FIELDS.forEach(f => {
+    const el = document.getElementById(`si-${f}-error`);
+    if (el && !el.classList.contains('hidden') && el.textContent) {
+      errors.push({ field: f, msg: el.textContent });
+    }
+  });
+  const dup = document.getElementById('si-duplicate');
+  const dupVisible = !dup.classList.contains('hidden');
+  if (errors.length === 0 && !dupVisible) {
+    summary.classList.add('hidden');
+    list.innerHTML = '';
+    return;
+  }
+  summary.classList.remove('hidden');
+  list.innerHTML = errors.map(e =>
+    `<li><button type="button" data-si-jump="${e.field}" class="font-medium text-red-700 underline hover:text-red-900">${escapeHtml(e.msg)}</button></li>`
+  ).join('') + (dupVisible ? `<li>${dup.innerHTML}</li>` : '');
+  list.querySelectorAll('[data-si-jump]').forEach(b => {
+    b.addEventListener('click', () => {
+      const field = b.dataset.siJump;
+      const id = SI_FIELD_META[field].input;
+      const el = document.getElementById(id);
+      if (el) { el.focus(); el.scrollIntoView({ behavior: 'smooth', block: 'center' }); }
+    });
+  });
+}
+
 document.getElementById('signin-form').addEventListener('submit', (e) => {
   e.preventDefault();
-  const name = document.getElementById('si-name').value.trim();
+  siClearAllErrors();
+
+  const name = document.getElementById('si-name').value;
   const idType = document.querySelector('input[name="si-id-type"]:checked').value;
   const idNumber = document.getElementById('si-id-number').value.trim();
   const visitTypeEl = document.querySelector('input[name="si-visit-type"]:checked');
-  const errEl = document.getElementById('si-error');
-  errEl.classList.add('hidden');
-  const showErr = (msg) => {
-    errEl.textContent = msg;
-    errEl.classList.remove('hidden');
-    errEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
-  };
-  if (!name) return showErr('Please enter your name.');
-  if (!idNumber) return showErr('Please enter your ID number.');
-  if (!visitTypeEl) return showErr('Please choose a type of visit.');
-  const visitType = visitTypeEl.value;
-  let rx = null;
-  if (visitType === 'pharmacy') {
-    const rxEl = document.querySelector('input[name="si-rx"]:checked');
-    if (!rxEl) return showErr('Please tell us about your prescription.');
-    rx = rxEl.value;
+  const visitType = visitTypeEl ? visitTypeEl.value : '';
+  const rxEl = document.querySelector('input[name="si-rx"]:checked');
+  const rx = rxEl ? rxEl.value : '';
+
+  let hasError = false;
+  if (name.trim().length < 2) {
+    siShowFieldError('name', 'Enter a name that is at least 2 characters.');
+    hasError = true;
   }
-  createEntry({ name, idType, idNumber, visitType, hasPrescription: rx });
+  if (!idNumber) {
+    siShowFieldError('id-number', 'Enter your ID number.');
+    hasError = true;
+  }
+  if (!visitType) {
+    siShowFieldError('visit-type', 'Choose a type of visit.');
+    hasError = true;
+  }
+  if (visitType === 'pharmacy' && !rx) {
+    siShowFieldError('has-prescription', 'Tell us about your prescription.');
+    hasError = true;
+  }
+
+  if (hasError) {
+    siRefreshSummary();
+    setTimeout(() => document.getElementById('si-summary').focus(), 0);
+    return;
+  }
+
+  // Duplicate-ID guard.
+  if (siFindDuplicate(idNumber)) {
+    const dup = document.getElementById('si-duplicate');
+    dup.innerHTML = `This ID number is already checked in today. <button type="button" data-si-lookup-prefill="${escapeHtml(idNumber)}" class="font-semibold underline hover:text-red-900">Find your place in the queue</button> below.`;
+    dup.classList.remove('hidden');
+    document.getElementById('si-id-number').classList.add('border-red-500');
+    siRefreshSummary();
+    setTimeout(() => document.getElementById('si-summary').focus(), 0);
+    return;
+  }
+
+  createEntry({ name: name.trim(), idType, idNumber, visitType, hasPrescription: rx || null });
   document.getElementById('signin-form').reset();
+  // Reset state from radio defaults
+  document.querySelector('input[name="si-id-type"][value="national_id"]').checked = true;
   document.getElementById('si-prescription-fs').classList.add('hidden');
+  document.querySelector('#si-id-number').placeholder = 'e.g. 1234567890';
   go('queue');
+});
+
+// Delegated handler for the "Find your place in the queue" button that
+// appears inside the duplicate-ID inline error AND inside the summary
+// box (which copies that HTML on every refresh). Works no matter where
+// the user clicks.
+document.addEventListener('click', (ev) => {
+  const target = ev.target;
+  if (target instanceof HTMLElement) {
+    const btn = target.closest('[data-si-lookup-prefill]');
+    if (btn) {
+      ev.preventDefault();
+      ev.stopPropagation();
+      const lk = document.getElementById('lk-id-number');
+      if (lk) lk.value = btn.dataset.siLookupPrefill;
+      go('lookup');
+    }
+  }
+});
+
+// Reactive clear: as soon as the user changes a field, its inline error
+// disappears. Summary box recalculates.
+document.getElementById('si-name').addEventListener('input', () => siClearFieldError('name'));
+document.getElementById('si-id-number').addEventListener('input', () => {
+  siClearFieldError('id-number');
+  document.getElementById('si-duplicate').classList.add('hidden');
+  document.getElementById('si-id-number').classList.remove('border-red-500');
+  siRefreshSummary();
 });
 
 // ============================================================
@@ -698,18 +864,37 @@ function renderQueue() {
   const box = document.getElementById('q-status-box');
   const ref = document.getElementById('q-ref');
   const visit = document.getElementById('q-visit-type');
+  const summary = document.getElementById('q-summary');
+  const lookupAnchor = document.getElementById('q-lookup-url');
+
+  // Always update the lookup URL to point at the deployed origin.
+  if (lookupAnchor) {
+    const base = (location.origin && location.origin !== 'null') ? location.origin + location.pathname : '';
+    const display = base.replace(/^https?:\/\//, '').replace(/\/?(preview\.html)?$/, '') + '/lookup';
+    lookupAnchor.textContent = display;
+    lookupAnchor.href = '#';
+    lookupAnchor.onclick = (ev) => { ev.preventDefault(); go('lookup'); };
+  }
 
   if (!entry) {
     greet.textContent = 'No active queue entry';
     box.innerHTML = `<section class="rounded-xl bg-slate-50 p-8 text-center"><p class="text-slate-600">Check in first to see your queue position.</p></section>`;
     ref.textContent = '—';
     visit.textContent = '—';
+    if (summary) summary.textContent = '';
     return;
   }
 
   greet.textContent = `Hi, ${entry.name.split(' ')[0]}`;
   ref.textContent = entry.token;
   visit.textContent = entry.visit_type;
+
+  // Subtle "Checked in as: ... · National ID: ending …XYZ" summary
+  if (summary) {
+    const idType = entry.id_type === 'passport' ? 'Passport' : 'National ID';
+    const idTail = (entry.id_number ?? '').toString().slice(-3);
+    summary.innerHTML = `Checked in as: <span class="font-medium text-slate-700">${escapeHtml(entry.name)}</span> · ${idType}: ending <span class="font-mono">…${escapeHtml(idTail)}</span>`;
+  }
 
   const stream = streamFor(entry.visit_type);
   const where = stream === 'pharmacy' ? 'the pharmacy window' : 'the desk';
@@ -1171,26 +1356,49 @@ document.getElementById('pharm-signout').addEventListener('click', () => {
 // ============================================================
 document.getElementById('lookup-form').addEventListener('submit', (e) => {
   e.preventDefault();
-  const id = document.getElementById('lk-id-number').value.trim();
+  const input = document.getElementById('lk-id-number');
+  const raw = input.value;
+  const trimmed = raw.trim();
   const err = document.getElementById('lk-error');
   err.classList.add('hidden');
-  if (!id) {
-    err.textContent = 'Please enter your ID number.';
+  input.classList.remove('border-red-500');
+
+  if (!trimmed) {
+    err.textContent = 'Enter your name, ID number, or reference code.';
     err.classList.remove('hidden');
+    input.classList.add('border-red-500');
     return;
   }
+
+  // Match against name (case-insensitive), id_number (exact),
+  // or token / reference (case-insensitive).
+  const lower = trimmed.toLowerCase();
   const entry = state.entries
-    .filter(e => e.id_number === id && e.status !== 'seen')
-    .sort((a, b) => new Date(b.created_at) - new Date(a.created_at))[0];
+    .filter(en => en.status !== 'seen')
+    .sort((a, b) => new Date(b.created_at) - new Date(a.created_at))
+    .find(en =>
+      en.name.toLowerCase() === lower ||
+      en.id_number === trimmed ||
+      en.token.toLowerCase() === lower
+    );
+
   if (!entry) {
-    err.textContent = 'No active queue entry found for that ID number today.';
+    err.textContent = 'We could not find an active queue entry matching that name, ID number, or reference code. Check what you entered and try again, or speak to a member of staff.';
     err.classList.remove('hidden');
+    input.classList.add('border-red-500');
     return;
   }
   state.currentToken = entry.token;
   save();
   document.getElementById('lookup-form').reset();
   go('queue');
+});
+
+// Reactive clear for the lookup field.
+document.getElementById('lk-id-number').addEventListener('input', () => {
+  const err = document.getElementById('lk-error');
+  err.classList.add('hidden');
+  document.getElementById('lk-id-number').classList.remove('border-red-500');
 });
 
 // ============================================================

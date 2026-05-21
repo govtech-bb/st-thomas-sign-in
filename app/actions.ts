@@ -6,6 +6,7 @@ import {
   callEntry,
   createEntry,
   findEntryByIdNumber,
+  findEntryByQuery,
   markSeen,
   priorityInsert,
   resetToday,
@@ -35,11 +36,25 @@ export async function signInAction(formData: FormData): Promise<void> {
   const visitType = String(formData.get("visit_type") ?? "").trim();
   const rawPrescription = String(formData.get("has_prescription") ?? "").trim();
 
-  if (!name) throw new Error("Name is required");
-  if (!idNumber) throw new Error("ID number is required");
-  if (!["national_id", "passport"].includes(idType)) throw new Error("Please select an ID type");
+  // Server-side validation is the source of truth. Client mirrors these
+  // checks for inline UX; if anything slips past the client, we still
+  // reject here with the same error codes.
+  if (name.length < 2) throw new Error("NAME_TOO_SHORT");
+  if (!idNumber) throw new Error("ID_NUMBER_REQUIRED");
+  if (!["national_id", "passport"].includes(idType)) throw new Error("ID_TYPE_INVALID");
   if (!VISIT_TYPE_VALUES.includes(visitType as (typeof VISIT_TYPE_VALUES)[number])) {
-    throw new Error("Please choose a visit type");
+    throw new Error("VISIT_TYPE_INVALID");
+  }
+  if (visitType === "pharmacy" && !PRESCRIPTION_VALUES.includes(rawPrescription as HasPrescription)) {
+    throw new Error("PRESCRIPTION_REQUIRED");
+  }
+
+  // Duplicate-ID guard: if this ID number already has an active queue
+  // entry today, don't create a second one. Client surfaces this as a
+  // link to /lookup pre-populated with the same ID.
+  const existing = await findEntryByIdNumber(idNumber);
+  if (existing) {
+    throw new Error(`DUPLICATE_ID:${idNumber}`);
   }
 
   const hasPrescription =
@@ -180,10 +195,13 @@ export async function priorityInsertAction(formData: FormData): Promise<void> {
 // --- Patient-facing actions ------------------------------------------------
 
 export async function lookupPatientAction(formData: FormData): Promise<void> {
-  const idNumber = String(formData.get("id_number") ?? "").trim();
-  if (!idNumber) throw new Error("Please enter your ID number");
-  const entry = await findEntryByIdNumber(idNumber);
-  if (!entry) throw new Error("No active queue entry found for that ID number today.");
+  // The form field is now "q" -- a single text field that can hold a name,
+  // ID number, or reference code. We still accept legacy "id_number" for
+  // backwards compatibility.
+  const raw = String(formData.get("q") ?? formData.get("id_number") ?? "").trim();
+  if (!raw) throw new Error("LOOKUP_EMPTY");
+  const entry = await findEntryByQuery(raw);
+  if (!entry) throw new Error("LOOKUP_NOT_FOUND");
   redirect(`/queue/${entry.token}`);
 }
 

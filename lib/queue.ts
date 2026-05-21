@@ -84,6 +84,34 @@ export async function findEntryByIdNumber(idNumber: string): Promise<QueueEntry 
   return (data as QueueEntry | null) ?? null;
 }
 
+// Patient-side lookup. Matches today's active entries on full name
+// (case-insensitive), ID number (exact), or reference token
+// (case-insensitive). First match wins, freshest entry first.
+export async function findEntryByQuery(query: string): Promise<QueueEntry | null> {
+  const trimmed = query.trim();
+  if (!trimmed) return null;
+
+  const supabase = getAnonServerSupabase();
+  const { data, error } = await supabase
+    .from("queue_entries")
+    .select("*")
+    .gte("created_at", startOfTodayIso())
+    .neq("status", "seen")
+    .order("created_at", { ascending: false });
+  if (error) throw error;
+
+  const lower = trimmed.toLowerCase();
+  const rows = (data ?? []) as QueueEntry[];
+  return (
+    rows.find(
+      (r) =>
+        r.name.toLowerCase() === lower ||
+        r.id_number === trimmed ||
+        r.token.toLowerCase() === lower,
+    ) ?? null
+  );
+}
+
 export async function getEntryByToken(token: string): Promise<QueueEntry | null> {
   const supabase = getAnonServerSupabase();
   const { data, error } = await supabase
