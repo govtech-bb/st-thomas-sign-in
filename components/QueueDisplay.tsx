@@ -44,10 +44,8 @@ function announcePatient(entry: QueueEntry) {
   const stream = streamFor(entry.visit_type);
   const where = stream === "pharmacy" ? "the pharmacy window" : "the front desk";
   const ticket = entry.ticket_number ?? 0;
-  // Audio reads the full name. The on-screen display still uses the
-  // masked form for privacy in the open waiting area.
   const msg = new SpeechSynthesisUtterance(
-    `Number ${ticket}, ${entry.name}. Please go to ${where}.`,
+    `Number ${ticket}, ${maskedDisplayName(entry.name)}. Please go to ${where}.`,
   );
   msg.voice = voice;
   window.speechSynthesis.speak(msg);

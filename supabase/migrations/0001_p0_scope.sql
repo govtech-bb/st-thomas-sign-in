@@ -13,7 +13,24 @@ alter table public.queue_entries
   add column if not exists priority_reason   text,
   add column if not exists transferred_from  text,
   add column if not exists pharmacy_notes    text,
-  add column if not exists has_prescription  text;
+  add column if not exists has_prescription  text,
+  add column if not exists id_type           text,
+  add column if not exists id_number         text;
+
+-- Backfill pre-existing rows so we can enforce NOT NULL.
+update public.queue_entries set id_type = 'national_id' where id_type is null;
+update public.queue_entries set id_number = '' where id_number is null;
+
+alter table public.queue_entries
+  alter column id_type   set not null,
+  alter column id_number set not null;
+
+alter table public.queue_entries
+  drop constraint if exists queue_entries_id_type_check;
+
+alter table public.queue_entries
+  add constraint queue_entries_id_type_check
+  check (id_type in ('national_id', 'passport'));
 
 -- Status now includes an intermediate 'preparing' state used by the
 -- pharmacist dashboard between "called" and "seen".
