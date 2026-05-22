@@ -1,21 +1,110 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import Link from "next/link";
+import { useEffect, useRef, useState, useTransition } from "react";
 import { signInAction } from "@/app/actions";
-import { VISIT_TYPES } from "@/lib/types";
+import { PRESCRIPTION_OPTIONS, VISIT_TYPES } from "@/lib/types";
 
-export function SignInForm() {
-  const [error, setError] = useState<string | null>(null);
+interface Props {
+  kiosk?: boolean;
+}
+
+type FieldKey = "name" | "id_number" | "visit_type" | "has_prescription";
+
+interface DuplicateError {
+  kind: "duplicate";
+  idNumber: string;
+}
+
+// Maps the FieldKey to the focusable input + a human label used in the
+// summary box.
+const FIELD_META: Record<FieldKey, { anchor: string; label: string }> = {
+  name: { anchor: "name", label: "Your name" },
+  id_number: { anchor: "id_number", label: "Identification number" },
+  visit_type: { anchor: "visit_type_general", label: "Type of visit" },
+  has_prescription: { anchor: "has_prescription_yes", label: "Prescription" },
+};
+
+function validate({
+  name,
+  idNumber,
+  visitType,
+  hasPrescription,
+}: {
+  name: string;
+  idNumber: string;
+  visitType: string;
+  hasPrescription: string;
+}): Partial<Record<FieldKey, string>> {
+  const errors: Partial<Record<FieldKey, string>> = {};
+  if (name.trim().length < 2) {
+    errors.name = "Enter a name that is at least 2 characters.";
+  }
+  if (!idNumber.trim()) {
+    errors.id_number = "Enter your ID number.";
+  }
+  if (!visitType) {
+    errors.visit_type = "Choose a type of visit.";
+  }
+  if (visitType === "pharmacy" && !hasPrescription) {
+    errors.has_prescription = "Tell us about your prescription.";
+  }
+  return errors;
+}
+
+export function SignInForm({ kiosk }: Props) {
   const [pending, startTransition] = useTransition();
+  const [idType, setIdType] = useState<"national_id" | "passport">("national_id");
+  const [name, setName] = useState("");
+  const [idNumber, setIdNumber] = useState("");
+  const [visitType, setVisitType] = useState<string>("");
+  const [hasPrescription, setHasPrescription] = useState<string>("");
+  const [errors, setErrors] = useState<Partial<Record<FieldKey, string>>>({});
+  const [duplicateError, setDuplicateError] = useState<DuplicateError | null>(null);
+  const [genericError, setGenericError] = useState<string | null>(null);
+  const summaryRef = useRef<HTMLDivElement | null>(null);
 
-  function onSubmit(formData: FormData) {
-    setError(null);
+  useEffect(() => {
+    if (kiosk) localStorage.setItem("kiosk", "true");
+  }, [kiosk]);
+
+  // Reactive clearing: as soon as the user changes a field, its inline
+  // error disappears. The summary box updates from the same state.
+  function clearError(field: FieldKey) {
+    setErrors((prev) => {
+      if (!prev[field]) return prev;
+      const next = { ...prev };
+      delete next[field];
+      return next;
+    });
+    setDuplicateError(null);
+    setGenericError(null);
+  }
+
+  function onSubmit() {
+    const fieldErrors = validate({ name, idNumber, visitType, hasPrescription });
+    setErrors(fieldErrors);
+    setDuplicateError(null);
+    setGenericError(null);
+
+    if (Object.keys(fieldErrors).length > 0) {
+      // Send focus to the summary box so screen-readers announce it and
+      // sighted users see it.
+      setTimeout(() => summaryRef.current?.focus(), 0);
+      return;
+    }
+
+    const fd = new FormData();
+    fd.set("name", name.trim());
+    fd.set("id_type", idType);
+    fd.set("id_number", idNumber.trim());
+    fd.set("visit_type", visitType);
+    if (visitType === "pharmacy") fd.set("has_prescription", hasPrescription);
+
     startTransition(async () => {
       try {
-        await signInAction(formData);
+        await signInAction(fd);
       } catch (err) {
-        // redirect() throws a NEXT_REDIRECT signal that the framework handles;
-        // surface only real failures to the user.
         if (
           err &&
           typeof err === "object" &&
@@ -25,13 +114,86 @@ export function SignInForm() {
         ) {
           throw err;
         }
-        setError(err instanceof Error ? err.message : "Something went wrong");
+        const message = err instanceof Error ? err.message : "Something went wrong";
+        if (message.startsWith("DUPLICATE_ID:")) {
+          setDuplicateError({ kind: "duplicate", idNumber: message.slice("DUPLICATE_ID:".length) });
+          setTimeout(() => summaryRef.current?.focus(), 0);
+          return;
+        }
+        // Map known server-side error codes back to inline messages.
+        const codeMap: Record<string, { field: FieldKey; msg: string }> = {
+          NAME_TOO_SHORT: { field: "name", msg: "Enter a name that is at least 2 characters." },
+          ID_NUMBER_REQUIRED: { field: "id_number", msg: "Enter your ID number." },
+          VISIT_TYPE_INVALID: { field: "visit_type", msg: "Choose a type of visit." },
+          PRESCRIPTION_REQUIRED: { field: "has_prescription", msg: "Tell us about your prescription." },
+        };
+        if (message in codeMap) {
+          const { field, msg } = codeMap[message];
+          setErrors({ [field]: msg });
+          setTimeout(() => summaryRef.current?.focus(), 0);
+          return;
+        }
+        setGenericError("Sorry, something went wrong. Please try again.");
       }
     });
   }
 
+  function focusField(anchor: string) {
+    const el = document.getElementById(anchor);
+    if (!el) return;
+    el.focus({ preventScroll: false });
+    el.scrollIntoView({ behavior: "smooth", block: "center" });
+  }
+
+  const orderedErrorKeys: FieldKey[] = ["name", "id_number", "visit_type", "has_prescription"];
+  const visibleErrors = orderedErrorKeys.filter((k) => errors[k]);
+  const showSummary = visibleErrors.length > 0 || duplicateError !== null || genericError !== null;
+
   return (
-    <form action={onSubmit} className="space-y-6">
+    <form
+      action={onSubmit}
+      noValidate
+      className="space-y-6"
+      aria-describedby={showSummary ? "form-error-summary" : undefined}
+    >
+      {showSummary && (
+        <div
+          id="form-error-summary"
+          ref={summaryRef}
+          tabIndex={-1}
+          role="alert"
+          className="rounded-md border-l-4 border-red-600 bg-red-50 p-4"
+        >
+          <h2 className="text-base font-bold text-red-800">There is a problem</h2>
+          <ul className="mt-2 list-disc space-y-1 pl-5 text-sm text-red-700">
+            {visibleErrors.map((k) => (
+              <li key={k}>
+                <button
+                  type="button"
+                  onClick={() => focusField(FIELD_META[k].anchor)}
+                  className="font-medium text-red-700 underline hover:text-red-900"
+                >
+                  {errors[k]}
+                </button>
+              </li>
+            ))}
+            {duplicateError && (
+              <li>
+                This ID number is already checked in today.{" "}
+                <Link
+                  href={`/lookup?q=${encodeURIComponent(duplicateError.idNumber)}`}
+                  className="font-semibold underline hover:text-red-900"
+                >
+                  Find your place in the queue
+                </Link>{" "}
+                below.
+              </li>
+            )}
+            {genericError && <li>{genericError}</li>}
+          </ul>
+        </div>
+      )}
+
       <div>
         <label htmlFor="name" className="field-label">
           Your name
@@ -41,43 +203,162 @@ export function SignInForm() {
           name="name"
           type="text"
           autoComplete="name"
-          required
           maxLength={120}
-          className="field-input"
+          className={`field-input ${errors.name ? "border-red-500" : ""}`}
           placeholder="e.g. Karen Williams"
+          value={name}
+          onChange={(e) => {
+            setName(e.target.value);
+            clearError("name");
+          }}
+          aria-invalid={!!errors.name}
+          aria-describedby={errors.name ? "name-error" : undefined}
         />
+        {errors.name && (
+          <p id="name-error" className="mt-1 text-sm font-medium text-red-700">
+            {errors.name}
+          </p>
+        )}
+      </div>
+
+      <div>
+        <span className="field-label block mb-2">Identification Number</span>
+        <div className="flex gap-3 mb-3">
+          <label className="flex cursor-pointer items-center gap-2 rounded-md border px-4 py-2.5 text-sm font-medium has-[:checked]:border-brand has-[:checked]:bg-brand-light border-slate-300">
+            <input
+              type="radio"
+              name="id_type"
+              value="national_id"
+              checked={idType === "national_id"}
+              onChange={() => setIdType("national_id")}
+              className="h-4 w-4 accent-brand"
+            />
+            National ID number
+          </label>
+          <label className="flex cursor-pointer items-center gap-2 rounded-md border px-4 py-2.5 text-sm font-medium has-[:checked]:border-brand has-[:checked]:bg-brand-light border-slate-300">
+            <input
+              type="radio"
+              name="id_type"
+              value="passport"
+              checked={idType === "passport"}
+              onChange={() => setIdType("passport")}
+              className="h-4 w-4 accent-brand"
+            />
+            Passport Number
+          </label>
+        </div>
+        <input
+          id="id_number"
+          name="id_number"
+          type="text"
+          maxLength={30}
+          className={`field-input ${errors.id_number || duplicateError ? "border-red-500" : ""}`}
+          placeholder={idType === "national_id" ? "e.g. 1234567890" : "e.g. A1234567"}
+          value={idNumber}
+          onChange={(e) => {
+            setIdNumber(e.target.value);
+            clearError("id_number");
+          }}
+          aria-invalid={!!errors.id_number || !!duplicateError}
+          aria-describedby={errors.id_number ? "id_number-error" : undefined}
+        />
+        {errors.id_number && (
+          <p id="id_number-error" className="mt-1 text-sm font-medium text-red-700">
+            {errors.id_number}
+          </p>
+        )}
+        {duplicateError && (
+          <p className="mt-1 text-sm font-medium text-red-700">
+            This ID number is already checked in today.{" "}
+            <Link
+              href={`/lookup?q=${encodeURIComponent(duplicateError.idNumber)}`}
+              className="font-semibold underline hover:text-red-900"
+            >
+              Find your place in the queue
+            </Link>{" "}
+            below.
+          </p>
+        )}
       </div>
 
       <fieldset>
         <legend className="field-label">Type of visit</legend>
         <div className="mt-3 space-y-2">
-          {VISIT_TYPES.map((v) => (
+          {VISIT_TYPES.map((v, i) => (
             <label
               key={v.value}
-              className="flex cursor-pointer items-center gap-3 rounded-md border border-slate-300 px-4 py-3 text-base has-[:checked]:border-brand has-[:checked]:bg-brand-light"
+              className="flex cursor-pointer items-start gap-3 rounded-md border border-slate-300 px-4 py-3 text-base has-[:checked]:border-brand has-[:checked]:bg-brand-light"
             >
               <input
+                id={i === 0 ? "visit_type_general" : `visit_type_${v.value}`}
                 type="radio"
                 name="visit_type"
                 value={v.value}
-                required
-                className="h-5 w-5 accent-brand"
+                checked={visitType === v.value}
+                onChange={() => {
+                  setVisitType(v.value);
+                  clearError("visit_type");
+                }}
+                className="mt-0.5 h-5 w-5 shrink-0 accent-brand"
               />
-              <span>{v.label}</span>
+              <span className="flex flex-col">
+                <span className="font-medium">{v.label}</span>
+                <span className="text-sm text-slate-500">{v.description}</span>
+              </span>
             </label>
           ))}
         </div>
+        {errors.visit_type && (
+          <p className="mt-2 text-sm font-medium text-red-700">{errors.visit_type}</p>
+        )}
       </fieldset>
 
-      {error && (
-        <p role="alert" className="rounded-md bg-red-50 px-4 py-3 text-red-700">
-          {error}
-        </p>
+      {visitType === "pharmacy" && (
+        <fieldset>
+          <legend className="field-label">Do you have a prescription?</legend>
+          <div className="mt-3 space-y-2">
+            {PRESCRIPTION_OPTIONS.map((opt, i) => (
+              <label
+                key={opt.value}
+                className="flex cursor-pointer items-start gap-3 rounded-md border border-slate-300 px-4 py-3 text-base has-[:checked]:border-brand has-[:checked]:bg-brand-light"
+              >
+                <input
+                  id={i === 0 ? "has_prescription_yes" : `has_prescription_${opt.value}`}
+                  type="radio"
+                  name="has_prescription"
+                  value={opt.value}
+                  checked={hasPrescription === opt.value}
+                  onChange={() => {
+                    setHasPrescription(opt.value);
+                    clearError("has_prescription");
+                  }}
+                  className="mt-0.5 h-5 w-5 shrink-0 accent-brand"
+                />
+                <span className="flex flex-col">
+                  <span className="font-medium">{opt.label}</span>
+                  <span className="text-sm text-slate-500">{opt.description}</span>
+                </span>
+              </label>
+            ))}
+          </div>
+          {errors.has_prescription && (
+            <p className="mt-2 text-sm font-medium text-red-700">{errors.has_prescription}</p>
+          )}
+        </fieldset>
       )}
 
       <button type="submit" className="btn-primary w-full text-lg" disabled={pending}>
-        {pending ? "Signing in..." : "Join the queue"}
+        {pending ? "Checking in..." : "Check in"}
       </button>
+
+      <div className="mt-4 text-center">
+        <Link
+          href="/lookup"
+          className="block w-full text-sm font-semibold text-brand hover:underline"
+        >
+          Already checked in? Find my place in queue →
+        </Link>
+      </div>
     </form>
   );
 }

@@ -4,9 +4,10 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 
 const links = [
-  { href: "/", label: "Sign in" },
+  { href: "/", label: "Check in" },
   { href: "/display", label: "Display" },
-  { href: "/staff", label: "Staff" },
+  { href: "/staff", label: "Clinic" },
+  { href: "/pharmacy", label: "Pharmacy" },
   { href: "/admin/qr", label: "QR code" },
 ];
 

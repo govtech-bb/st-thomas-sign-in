@@ -1,6 +1,11 @@
 import { createClient } from "@supabase/supabase-js";
+import { isOfflineMode } from "./offline/mode";
+import { offlineServerClient } from "./offline/client";
 
 export function getServerSupabase() {
+  if (isOfflineMode()) {
+    return offlineServerClient() as unknown as ReturnType<typeof createClient>;
+  }
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
   if (!url || !serviceKey) {
@@ -14,6 +19,9 @@ export function getServerSupabase() {
 }
 
 export function getAnonServerSupabase() {
+  if (isOfflineMode()) {
+    return offlineServerClient() as unknown as ReturnType<typeof createClient>;
+  }
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
   if (!url || !anonKey) {

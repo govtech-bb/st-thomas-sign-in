@@ -7,6 +7,8 @@ create table if not exists public.queue_entries (
   id uuid primary key default gen_random_uuid(),
   token text unique not null,
   name text not null,
+  id_type text not null check (id_type in ('national_id', 'passport')),
+  id_number text not null,
   visit_type text not null,
   position integer not null,
   status text not null default 'waiting'

@@ -1,3 +1,15 @@
+## Team Skills
+Shared Claude Code skills are maintained at https://github.com/govtech-bb/team-skills.
+
+**First-time setup** — run this once in PowerShell to install the skills:
+```powershell
+powershell -ExecutionPolicy Bypass -File setup-team-skills.ps1
+```
+
+**To update** when new skills are added to the repo, run the same script again. Restart Claude Code after installing.
+
+---
+
 ## Deploy Configuration (configured by /setup-deploy)
 - Platform: Netlify
 - Production URL: https://st-thomas-queue.netlify.app

@@ -3,18 +3,21 @@
 A lightweight, mobile-first patient queue management system for the **St Thomas
 Outpatient Clinic** (Barbados). Patients scan a QR code on arrival, complete a
 short sign-in form on their phone, and receive a personal link that tracks
-their queue position in real time. Staff use a simple PIN-gated dashboard to
-call patients and advance the queue.
+their queue position in real time. Staff sign in with their clinic email to
+manage two parallel queues (clinical and pharmacy) with transfer, priority
+insert, and a prescription-aware pharmacist workflow.
 
 ## What it does
 
-| Route              | Audience  | Purpose                                                    |
-| ------------------ | --------- | ---------------------------------------------------------- |
-| `/`                | Patients  | Sign-in form (QR code points here). Issues a personal link.|
-| `/queue/[token]`   | Patients  | Live queue position; updates over Supabase Realtime.       |
-| `/display`         | Public TV | Full-page waiting-room screen, initials only.              |
-| `/staff`           | Staff     | PIN-gated dashboard: call patient, mark seen, reset day.   |
-| `/admin/qr`        | Staff     | Print-friendly QR code linking back to `/`.                |
+| Route              | Audience    | Purpose                                                                                |
+| ------------------ | ----------- | -------------------------------------------------------------------------------------- |
+| `/`                | Patients    | Sign-in form (QR code points here). Issues a personal link.                            |
+| `/queue/[token]`   | Patients    | Live queue position + ticket number; patient-initiated transfer between streams.        |
+| `/lookup`          | Patients    | Recover the personal link by ID number.                                                 |
+| `/display`         | Public TV   | Waiting-room screen segmented by stream. Ticket numbers and masked names only.          |
+| `/staff`           | Clinicians  | Auth-gated dashboard: call, mark seen, transfer, priority insert.                      |
+| `/pharmacy`        | Pharmacists | Auth-gated pharmacy queue: prescription type, fulfilment notes, preparing/served.       |
+| `/admin/qr`        | Staff       | Print-friendly QR code linking back to `/`.                                            |
 
 ## Tech stack
 
@@ -35,9 +38,14 @@ npm install
 ### 2. Create a Supabase project
 
 1. Create a new project at <https://supabase.com>.
-2. In **SQL Editor**, run [`supabase/schema.sql`](supabase/schema.sql). This
-   creates the `queue_entries` table, indexes, row-level security policies,
-   and adds the table to the realtime publication.
+2. In **SQL Editor**, run the following in order:
+   - [`supabase/schema.sql`](supabase/schema.sql) — base `queue_entries`
+     table, indexes, RLS, realtime.
+   - [`supabase/migrations/0001_p0_scope.sql`](supabase/migrations/0001_p0_scope.sql)
+     — adds ticket numbers, transfers, priority, the pharmacist workflow,
+     `staff_users`, and the `queue_audit` log.
+   - [`supabase/migrations/0002_seed_staff.sql`](supabase/migrations/0002_seed_staff.sql)
+     — seeds demo staff accounts (edit the password literal first).
 3. In **Project Settings -> API**, copy:
    - **Project URL** -> `NEXT_PUBLIC_SUPABASE_URL`
    - **anon public** key -> `NEXT_PUBLIC_SUPABASE_ANON_KEY`
@@ -57,8 +65,10 @@ cp .env.example .env.local
 | `NEXT_PUBLIC_SUPABASE_URL`        | Supabase project URL                                   |
 | `NEXT_PUBLIC_SUPABASE_ANON_KEY`   | Supabase anon/public key                               |
 | `SUPABASE_SERVICE_ROLE_KEY`       | Supabase service-role key (server-side writes)         |
-| `STAFF_PIN`                       | PIN for `/staff` (treat as a shared secret)            |
 | `NEXT_PUBLIC_BASE_URL`            | Public base URL used by the QR code (no trailing `/`)  |
+
+Staff authentication uses Supabase Auth (email + password). Seed demo
+accounts via `supabase/migrations/0002_seed_staff.sql`.
 
 ### 4. Run the dev server
 
@@ -84,14 +94,17 @@ back to the request host headers.
 
 ## Staff dashboard
 
-- Open `/staff`. The first time you visit you'll be asked for the `STAFF_PIN`.
-- The PIN is stored in an httpOnly cookie for 12 hours.
-- Click **Call** to mark a waiting patient as called (their phone shows a
-  prominent "please go to the desk" banner).
+- Open `/staff` and sign in with your clinic email and password.
+- Roles route automatically: **clinicians** see `/staff`, **pharmacists**
+  see `/pharmacy`, **admins** see both plus the reset-day action.
+- Click **Call** to mark a waiting patient as called.
 - Click **Mark seen** after the consult to remove them from the active queue.
-- **Reset day** deletes every entry created today. Two-step confirmation.
-  Use it at the end of the day or for a clean start.
-- Click **Sign out** to clear the PIN cookie.
+- **Move to…** transfers a patient to a different visit type; the entry is
+  placed at the end of the destination queue.
+- **+ Priority insert** adds an out-of-band entry (police / prison / emergency)
+  to the front of a chosen queue. Hidden from the public display.
+- **Reset day** (admin only) deletes every entry created today. Two-step
+  confirmation.
 
 ## How the queue works
 
