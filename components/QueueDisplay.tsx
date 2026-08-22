@@ -1,14 +1,13 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { getBrowserSupabase } from "@/lib/supabase";
-import type { QueueEntry, Stream } from "@/lib/types";
+import type { Stream } from "@/lib/types";
 import { STREAM_LABELS, streamFor } from "@/lib/types";
-import { maskedDisplayName } from "@/lib/queue-client";
+import { maskedDisplayName, type DisplayEntry } from "@/lib/queue-client";
 import { PoweredBy } from "@/components/PoweredBy";
 
 interface Props {
-  initialEntries: QueueEntry[];
+  initialEntries: DisplayEntry[];
 }
 
 function playChime(ctx: AudioContext) {
@@ -38,7 +37,7 @@ function getFemaleVoice(): SpeechSynthesisVoice | null {
   );
 }
 
-function announcePatient(entry: QueueEntry) {
+function announcePatient(entry: DisplayEntry) {
   const voice = getFemaleVoice();
   if (!voice) return;
   const stream = streamFor(entry.visit_type);
@@ -74,7 +73,7 @@ function formatClock(now: number): string {
 
 // Top 3 currently called or preparing, freshest first. Priority entries are
 // hidden from the public display per spec.
-function topCalled(entries: QueueEntry[]): QueueEntry[] {
+function topCalled(entries: DisplayEntry[]): DisplayEntry[] {
   return entries
     .filter((e) => (e.status === "called" || e.status === "preparing") && !e.priority)
     .sort(
@@ -86,7 +85,7 @@ function topCalled(entries: QueueEntry[]): QueueEntry[] {
 }
 
 export function QueueDisplay({ initialEntries }: Props) {
-  const [entries, setEntries] = useState<QueueEntry[]>(initialEntries);
+  const [entries, setEntries] = useState<DisplayEntry[]>(initialEntries);
   const [now, setNow] = useState<number>(() => Date.now());
   const [audioUnlocked, setAudioUnlocked] = useState(false);
   const audioCtxRef = useRef<AudioContext | null>(null);
@@ -114,51 +113,40 @@ export function QueueDisplay({ initialEntries }: Props) {
   }, []);
 
   useEffect(() => {
-    const supabase = getBrowserSupabase();
-
+    // Polls the sanitized server feed; the browser never touches the
+    // queue_entries table directly.
     async function refresh() {
-      const today = new Date();
-      today.setHours(0, 0, 0, 0);
-      const { data } = await supabase
-        .from("queue_entries")
-        .select("*")
-        .gte("created_at", today.toISOString())
-        .order("priority", { ascending: false })
-        .order("created_at", { ascending: true });
-      const fresh = (data ?? []) as QueueEntry[];
+      try {
+        const res = await fetch("/api/display", { cache: "no-store" });
+        if (!res.ok) return;
+        const data = await res.json();
+        const fresh = (data.entries ?? []) as DisplayEntry[];
 
-      const visible = topCalled(fresh);
-      const newlyVisible = visible.filter(
-        (e) => !visibleCalledIdsRef.current.has(e.id),
-      );
+        const visible = topCalled(fresh);
+        const newlyVisible = visible.filter(
+          (e) => !visibleCalledIdsRef.current.has(e.id),
+        );
 
-      if (newlyVisible.length > 0 && audioCtxRef.current) {
-        playChime(audioCtxRef.current);
-        // Call the name twice with a gap, so a patient who missed the
-        // first announcement still hears the second.
-        setTimeout(() => newlyVisible.forEach((e) => announcePatient(e)), 1100);
-        setTimeout(() => newlyVisible.forEach((e) => announcePatient(e)), 5500);
+        if (newlyVisible.length > 0 && audioCtxRef.current) {
+          playChime(audioCtxRef.current);
+          // Call the name twice with a gap, so a patient who missed the
+          // first announcement still hears the second.
+          setTimeout(() => newlyVisible.forEach((e) => announcePatient(e)), 1100);
+          setTimeout(() => newlyVisible.forEach((e) => announcePatient(e)), 5500);
+        }
+
+        visibleCalledIdsRef.current = new Set(visible.map((e) => e.id));
+        setEntries(fresh);
+      } catch {
+        // Transient network errors: keep showing the last known state.
       }
-
-      visibleCalledIdsRef.current = new Set(visible.map((e) => e.id));
-      setEntries(fresh);
     }
 
-    const channel = supabase
-      .channel("queue:display")
-      .on(
-        "postgres_changes",
-        { event: "*", schema: "public", table: "queue_entries" },
-        () => { void refresh(); },
-      )
-      .subscribe();
+    void refresh();
 
     const poll = setInterval(() => void refresh(), 2_000);
 
-    return () => {
-      void supabase.removeChannel(channel);
-      clearInterval(poll);
-    };
+    return () => clearInterval(poll);
   }, []);
 
   const { calledNow, columns } = useMemo(() => {

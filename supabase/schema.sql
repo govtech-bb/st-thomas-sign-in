@@ -25,21 +25,25 @@ create index if not exists queue_entries_status_created_at_idx
   on public.queue_entries (status, created_at);
 
 -- Row Level Security ---------------------------------------------------------
--- The MVP uses the anon key for public reads (queue display, personal page)
--- and the service role key from the server for all writes (sign-in, staff
--- actions, reset). Patients never write directly from the browser.
+-- The service role key (server only) is used for ALL database access:
+-- reads happen inside Next.js server code / API routes, writes via server
+-- actions. The browser never talks to the table directly, so no anon or
+-- authenticated policies exist here -- access is deny-by-default.
+--
+-- NOTE: a previous revision exposed every row (name, ID number, token) to
+-- anyone holding the anon key via a `for select using (true)` policy and
+-- realtime broadcasts. If you deployed that version, revoke it:
+--
+--   drop policy if exists "queue_entries public read" on public.queue_entries;
+--
+-- Existing deployments must also stop browser clients from subscribing to
+-- postgres_changes on this table; the app now polls the server-side API
+-- routes instead.
 
 alter table public.queue_entries enable row level security;
 
--- Public read access -- queue position lookup and waiting-room display.
-drop policy if exists "queue_entries public read" on public.queue_entries;
-create policy "queue_entries public read"
-  on public.queue_entries
-  for select
-  using (true);
-
--- No insert/update/delete policies for anon: those operations only succeed
--- via the service_role key (which bypasses RLS) used by the Next.js server.
+-- Intentionally NO policies: only the service_role key (which bypasses RLS)
+-- may read or write queue_entries, and it is used exclusively server-side.
 
 -- Realtime -------------------------------------------------------------------
 -- Add the table to the supabase_realtime publication so postgres_changes
