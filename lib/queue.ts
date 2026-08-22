@@ -1,4 +1,4 @@
-import { getServerSupabase, getAnonServerSupabase } from "./supabase-server";
+import { getServerSupabase } from "./supabase-server";
 import { generateToken } from "./token";
 import { streamFor } from "./types";
 import type { HasPrescription, QueueEntry, Stream } from "./types";
@@ -59,7 +59,10 @@ async function writeAudit(row: {
 }
 
 export async function listTodayEntries(): Promise<QueueEntry[]> {
-  const supabase = getAnonServerSupabase();
+  // Server-side only. Reads go through the service role client because the
+  // table has no anon policies (deny-by-default RLS); this function must
+  // never be imported into client components.
+  const supabase = getServerSupabase();
   const { data, error } = await supabase
     .from("queue_entries")
     .select("*")
@@ -71,7 +74,7 @@ export async function listTodayEntries(): Promise<QueueEntry[]> {
 }
 
 export async function findEntryByIdNumber(idNumber: string): Promise<QueueEntry | null> {
-  const supabase = getAnonServerSupabase();
+  const supabase = getServerSupabase();
   const { data } = await supabase
     .from("queue_entries")
     .select("*")
@@ -91,7 +94,7 @@ export async function findEntryByQuery(query: string): Promise<QueueEntry | null
   const trimmed = query.trim();
   if (!trimmed) return null;
 
-  const supabase = getAnonServerSupabase();
+  const supabase = getServerSupabase();
   const { data, error } = await supabase
     .from("queue_entries")
     .select("*")
@@ -113,7 +116,7 @@ export async function findEntryByQuery(query: string): Promise<QueueEntry | null
 }
 
 export async function getEntryByToken(token: string): Promise<QueueEntry | null> {
-  const supabase = getAnonServerSupabase();
+  const supabase = getServerSupabase();
   const { data, error } = await supabase
     .from("queue_entries")
     .select("*")

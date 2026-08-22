@@ -2,7 +2,6 @@
 
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { getBrowserSupabase } from "@/lib/supabase";
 import type { QueueEntry, QueueStatus } from "@/lib/types";
 import { streamFor } from "@/lib/types";
 
@@ -55,56 +54,31 @@ export function QueuePosition({ initialEntry, initialAhead }: Props) {
   }, [router]);
 
   useEffect(() => {
-    const supabase = getBrowserSupabase();
-
+    // Polls the token-scoped server endpoint; the browser never touches the
+    // queue_entries table directly and never sees other patients' rows.
     async function refresh() {
-      const today = new Date();
-      today.setHours(0, 0, 0, 0);
-
-      const { data: meRow } = await supabase
-        .from("queue_entries")
-        .select("status, created_at, visit_type")
-        .eq("id", initialEntry.id)
-        .maybeSingle();
-
-      if (!meRow) return;
-
-      const myStream = streamFor(meRow.visit_type as string);
-      const { data: aheadRows } = await supabase
-        .from("queue_entries")
-        .select("id, priority, created_at, visit_type")
-        .eq("status", "waiting")
-        .gte("created_at", today.toISOString());
-
-      const filteredAhead = (aheadRows ?? []).filter((r) => {
-        if (streamFor((r as { visit_type: string }).visit_type) !== myStream) return false;
-        if ((r as { priority?: boolean }).priority) return true;
-        return (
-          new Date((r as { created_at: string }).created_at).getTime() <
-          new Date(meRow.created_at as string).getTime()
+      try {
+        const res = await fetch(
+          `/api/position?token=${encodeURIComponent(initialEntry.token)}`,
+          { cache: "no-store" },
         );
-      });
-
-      setState({
-        status: (meRow.status as QueueStatus) ?? "waiting",
-        ahead: meRow.status === "waiting" ? filteredAhead.length : 0,
-        visitType: meRow.visit_type as string,
-        createdAt: meRow.created_at as string,
-      });
+        if (!res.ok) return;
+        const data = await res.json();
+        setState({
+          status: (data.status as QueueStatus) ?? "waiting",
+          ahead: typeof data.ahead === "number" ? data.ahead : 0,
+          visitType: data.visitType as string,
+          createdAt: data.createdAt as string,
+        });
+      } catch {
+        // Keep showing the last known state on transient errors.
+      }
     }
 
     void refresh();
 
-    const channel = supabase
-      .channel(`queue:${initialEntry.id}`)
-      .on(
-        "postgres_changes",
-        { event: "*", schema: "public", table: "queue_entries" },
-        () => { void refresh(); },
-      )
-      .subscribe();
-
-    return () => { void supabase.removeChannel(channel); };
+    const poll = setInterval(() => void refresh(), 5_000);
+    return () => clearInterval(poll);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [initialEntry.id]);
 

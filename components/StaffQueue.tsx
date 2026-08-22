@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useMemo, useState, useTransition } from "react";
-import { getBrowserSupabase } from "@/lib/supabase";
 import type { QueueEntry, StaffRole } from "@/lib/types";
 import { STREAM_LABELS, VISIT_TYPES, streamFor } from "@/lib/types";
 import { PoweredBy } from "@/components/PoweredBy";
@@ -48,30 +47,23 @@ export function StaffQueue({ initialEntries, role, email }: Props) {
   const [activeTab, setActiveTab] = useState<Tab>("waiting");
 
   useEffect(() => {
-    const supabase = getBrowserSupabase();
-
+    // Polls the staff-only server feed instead of subscribing to realtime
+    // broadcasts, which would deliver every patient row to the browser.
     async function refresh() {
-      const today = new Date();
-      today.setHours(0, 0, 0, 0);
-      const { data } = await supabase
-        .from("queue_entries")
-        .select("*")
-        .gte("created_at", today.toISOString())
-        .order("priority", { ascending: false })
-        .order("created_at", { ascending: true });
-      setEntries((data ?? []) as QueueEntry[]);
+      try {
+        const res = await fetch("/api/staff-queue", { cache: "no-store" });
+        if (!res.ok) return;
+        const data = await res.json();
+        setEntries((data.entries ?? []) as QueueEntry[]);
+      } catch {
+        // Keep showing the last known state on transient errors.
+      }
     }
 
-    const channel = supabase
-      .channel("queue:staff")
-      .on(
-        "postgres_changes",
-        { event: "*", schema: "public", table: "queue_entries" },
-        () => { void refresh(); },
-      )
-      .subscribe();
+    void refresh();
 
-    return () => { void supabase.removeChannel(channel); };
+    const poll = setInterval(() => void refresh(), 5_000);
+    return () => clearInterval(poll);
   }, []);
 
   // Clinic dashboard is scoped to the clinical stream only. Pharmacy
